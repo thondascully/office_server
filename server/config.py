@@ -29,6 +29,9 @@ METADATA_FILE = DATA_DIR / "metadata.json"
 # Face recognition settings
 SIMILARITY_THRESHOLD = 0.5
 MIN_FACE_SIZE = (30, 30)
+# Resize images to this max dimension before face detection (faster processing)
+# Face detection runs on this smaller image, then crops/resizes to 112x112 for model
+DETECTION_MAX_WIDTH = 800  # Resize to max 800px width (maintains aspect ratio)
 
 # Server settings
 HOST = os.getenv("HOST", "0.0.0.0")

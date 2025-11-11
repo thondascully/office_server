@@ -4,6 +4,7 @@ Handles registration and event processing
 """
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException
 from typing import List, Optional
+import time
 import config
 from database import metadata_db, vector_db
 from face_recognition import face_recognizer
@@ -23,9 +24,10 @@ async def register_person(
     if len(images) == 0:
         raise HTTPException(status_code=400, detail="No images provided")
 
-    # Convert to OpenCV images
+    # Convert to OpenCV images (limit to 5 for faster processing)
+    max_images = 5
     cv_images = []
-    for upload_file in images:
+    for upload_file in images[:max_images]:  # Only process first 5
         image_bytes = await upload_file.read()
         try:
             img = bytes_to_image(image_bytes)
@@ -36,6 +38,9 @@ async def register_person(
 
     if len(cv_images) == 0:
         raise HTTPException(status_code=400, detail="Failed to decode any images")
+    
+    if len(images) > max_images:
+        print(f"[Registration] Processed {len(cv_images)}/{len(images)} images (limited to {max_images} for speed)")
 
     # Generate mean embedding (CPU-intensive, but shouldn't block server)
     try:
@@ -85,10 +90,11 @@ async def handle_event(
 
     print(f"[Event] {direction} from {rpi_id} at {timestamp}, {len(images)} images")
 
-    # Convert to OpenCV images
+    # Convert to OpenCV images (limit to 5 for faster processing)
+    max_images = 5
     cv_images = []
     decode_errors = 0
-    for i, upload_file in enumerate(images):
+    for i, upload_file in enumerate(images[:max_images]):  # Only process first 5
         try:
             image_bytes = await upload_file.read()
             if len(image_bytes) == 0:
@@ -98,7 +104,7 @@ async def handle_event(
             cv_images.append(img)
         except Exception as e:
             decode_errors += 1
-            print(f"  Failed to decode image {i+1}/{len(images)}: {e}")
+            print(f"  Failed to decode image {i+1}/{min(len(images), max_images)}: {e}")
             continue
 
     if len(cv_images) == 0:
@@ -106,9 +112,13 @@ async def handle_event(
         print(f"[Event] ERROR: {error_msg}")
         raise HTTPException(status_code=400, detail=error_msg)
     
-    print(f"[Event] Successfully decoded {len(cv_images)}/{len(images)} images")
+    if len(images) > max_images:
+        print(f"[Event] Processed {len(cv_images)}/{len(images)} images (limited to {max_images} for speed)")
+    else:
+        print(f"[Event] Successfully decoded {len(cv_images)}/{len(images)} images")
 
-    # Generate mean embedding (CPU-intensive, but shouldn't block server)
+    # Generate mean embedding (CPU-intensive, optimized for speed)
+    start_time = time.time()
     print(f"[Event] Computing face embedding from {len(cv_images)} images...")
     try:
         mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
@@ -124,7 +134,8 @@ async def handle_event(
         print(f"[Event] ERROR: {error_msg}")
         raise HTTPException(status_code=400, detail=error_msg)
     
-    print(f"[Event] Face embedding computed successfully")
+    elapsed = time.time() - start_time
+    print(f"[Event] Face embedding computed successfully in {elapsed:.2f}s")
 
     # Search for match
     match_result = vector_db.search(mean_embedding)

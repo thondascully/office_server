@@ -37,13 +37,31 @@ class FaceRecognizer:
             raise RuntimeError(f"Failed to load face recognition models: {e}")
 
     def detect_face(self, image: np.ndarray) -> Optional[np.ndarray]:
-        """Detect and extract largest face"""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        """
+        Detect and extract largest face
+        Optimized: Resizes image before detection for faster processing
+        """
+        # Resize image for faster face detection (maintains aspect ratio)
+        original_height, original_width = image.shape[:2]
+        if original_width > config.DETECTION_MAX_WIDTH:
+            scale = config.DETECTION_MAX_WIDTH / original_width
+            new_width = config.DETECTION_MAX_WIDTH
+            new_height = int(original_height * scale)
+            detection_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+        else:
+            detection_image = image
+            scale = 1.0
+
+        # Face detection on resized image (much faster)
+        gray = cv2.cvtColor(detection_image, cv2.COLOR_BGR2GRAY)
+        
+        # Scale min face size for resized image
+        min_size_scaled = (int(config.MIN_FACE_SIZE[0] * scale), int(config.MIN_FACE_SIZE[1] * scale))
         faces = self.face_cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
             minNeighbors=5,
-            minSize=config.MIN_FACE_SIZE
+            minSize=min_size_scaled
         )
 
         if len(faces) == 0:
@@ -53,15 +71,16 @@ class FaceRecognizer:
         largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
         x, y, w, h = largest_face
 
-        # Crop with padding
+        # Crop with padding (from resized image)
         padding = int(0.2 * max(w, h))
         y1 = max(0, y - padding)
-        y2 = min(image.shape[0], y + h + padding)
+        y2 = min(detection_image.shape[0], y + h + padding)
         x1 = max(0, x - padding)
-        x2 = min(image.shape[1], x + w + padding)
+        x2 = min(detection_image.shape[1], x + w + padding)
 
-        face_crop = image[y1:y2, x1:x2]
-        face_resized = cv2.resize(face_crop, (112, 112))
+        face_crop = detection_image[y1:y2, x1:x2]
+        # Resize to model input size (112x112)
+        face_resized = cv2.resize(face_crop, (112, 112), interpolation=cv2.INTER_LINEAR)
         face_rgb = cv2.cvtColor(face_resized, cv2.COLOR_BGR2RGB)
 
         return face_rgb
@@ -89,14 +108,24 @@ class FaceRecognizer:
 
         return embedding_normalized
 
-    def compute_mean_embedding(self, images: List[np.ndarray]) -> Optional[np.ndarray]:
-        """Compute mean embedding from multiple images"""
+    def compute_mean_embedding(self, images: List[np.ndarray], min_embeddings: int = 2) -> Optional[np.ndarray]:
+        """
+        Compute mean embedding from multiple images
+        Optimized: stops early once we have enough good embeddings (min_embeddings)
+        """
         embeddings = []
-
+        
+        # Process images until we have enough good embeddings
         for img in images:
             embedding = self.get_embedding(img)
             if embedding is not None:
                 embeddings.append(embedding)
+                # Early stop: if we have enough embeddings, we can stop processing
+                # This speeds up processing when we have 5+ images
+                if len(embeddings) >= min_embeddings and len(embeddings) >= 3:
+                    # For 5 images, stop after 3-4 good embeddings (faster, still accurate)
+                    if len(images) <= 5:
+                        break
 
         if len(embeddings) == 0:
             return None
@@ -104,8 +133,6 @@ class FaceRecognizer:
         mean_embedding = np.mean(embeddings, axis=0)
         mean_embedding_normalized = mean_embedding / np.linalg.norm(mean_embedding)
 
-        # Log embedding generation (only if verbose logging needed)
-        # print(f"[Face Recognition] Generated mean embedding from {len(embeddings)}/{len(images)} images")
         return mean_embedding_normalized
 
 
