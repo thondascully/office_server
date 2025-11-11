@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+onnxruntime
+opencv-python
+numpy
+jinja2
+aiofiles
+pydantic

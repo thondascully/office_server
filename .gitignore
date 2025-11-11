@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+teo/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Docker
+.docker/
+
+# Keep models - uncomment if models are too large for git
+# server/models/*.onnx
+# server/models/*.xml
+teo
+teo/
+teo/*
+__pycache__
+DEPLOYMENT.md
+QUICK_START_DEPLOY.md
+models
+models/
+models/*
+server/__pycache__

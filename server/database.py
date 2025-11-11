@@ -1,0 +1,246 @@
+# server/database.py
+"""
+Database Management - File-based vector and metadata storage
+"""
+import json
+import numpy as np
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+import config
+from models import Person
+
+class VectorDatabase:
+    """Manages face embeddings (vectors)"""
+
+    def __init__(self):
+        self.vectors: Dict[str, List[float]] = {}
+        self.load()
+
+    def load(self):
+        """Load vectors from JSON file"""
+        if config.VECTOR_DB_FILE.exists():
+            with open(config.VECTOR_DB_FILE, 'r') as f:
+                self.vectors = json.load(f)
+            print(f"✅ Loaded {len(self.vectors)} vectors")
+        else:
+            self.vectors = {}
+            print("📝 Created new vector database")
+
+    def save(self):
+        """Save vectors to JSON file"""
+        with open(config.VECTOR_DB_FILE, 'w') as f:
+            json.dump(self.vectors, f)
+        print(f"💾 Saved {len(self.vectors)} vectors")
+
+    def add(self, person_id: str, vector: np.ndarray):
+        """Add or update vector for person"""
+        self.vectors[person_id] = vector.tolist()
+        self.save()
+
+    def get(self, person_id: str) -> Optional[np.ndarray]:
+        """Get vector for person"""
+        if person_id in self.vectors:
+            return np.array(self.vectors[person_id])
+        return None
+
+    def search(self, query_vector: np.ndarray, threshold: float = config.SIMILARITY_THRESHOLD) -> Optional[Tuple[str, float]]:
+        """Find best matching person"""
+        if not self.vectors:
+            return None
+
+        query_normalized = query_vector / np.linalg.norm(query_vector)
+        best_match = None
+        best_similarity = -1.0
+
+        for person_id, stored_vector in self.vectors.items():
+            stored_array = np.array(stored_vector)
+            stored_normalized = stored_array / np.linalg.norm(stored_array)
+            similarity = float(np.dot(query_normalized, stored_normalized))
+
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match = person_id
+
+        if best_similarity >= threshold:
+            return best_match, best_similarity
+        return None
+
+    def delete(self, person_id: str):
+        """Delete person's vector"""
+        if person_id in self.vectors:
+            del self.vectors[person_id]
+            self.save()
+
+    def export(self, filepath: Path):
+        """Export database to file"""
+        with open(filepath, 'w') as f:
+            json.dump(self.vectors, f, indent=2)
+
+    def import_from(self, filepath: Path):
+        """Import database from file"""
+        with open(filepath, 'r') as f:
+            imported = json.load(f)
+        self.vectors.update(imported)
+        self.save()
+
+
+class MetadataDatabase:
+    """Manages person metadata (names, images, state)"""
+
+    def __init__(self):
+        self.people: Dict[str, Person] = {}
+        self.unknown_counter = 0
+        self.load()
+
+    def load(self):
+        """Load metadata from JSON file"""
+        if config.METADATA_FILE.exists():
+            with open(config.METADATA_FILE, 'r') as f:
+                data = json.load(f)
+
+            self.people = {}
+            for person_id, person_data in data['people'].items():
+                # Convert string timestamps back to datetime
+                person_data['created_at'] = datetime.fromisoformat(person_data['created_at'])
+                person_data['last_seen'] = datetime.fromisoformat(person_data['last_seen'])
+                # Remove person_id from person_data if it exists to avoid duplicate
+                person_data.pop('person_id', None)
+                self.people[person_id] = Person(**person_data, person_id=person_id)
+
+            self.unknown_counter = data.get('unknown_counter', 0)
+            print(f"✅ Loaded {len(self.people)} people")
+        else:
+            self.people = {}
+            self.unknown_counter = 0
+            print("📝 Created new metadata database")
+
+    def save(self):
+        """Save metadata to JSON file"""
+        data = {
+            'people': {},
+            'unknown_counter': self.unknown_counter
+        }
+
+        for person_id, person in self.people.items():
+            person_dict = person.dict()
+            # Convert datetime to string for JSON
+            person_dict['created_at'] = person.created_at.isoformat()
+            person_dict['last_seen'] = person.last_seen.isoformat()
+            data['people'][person_id] = person_dict
+
+        with open(config.METADATA_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+
+    def create_person(self, name: Optional[str] = None, image_paths: List[str] = []) -> str:
+        """Create new person entry"""
+        if name:
+            person_id = name.lower().replace(' ', '_')
+        else:
+            # Auto-generate ID for unlabeled person
+            self.unknown_counter += 1
+            person_id = f"unknown_{self.unknown_counter:03d}"
+
+        # Ensure unique ID
+        base_id = person_id
+        counter = 1
+        while person_id in self.people:
+            person_id = f"{base_id}_{counter}"
+            counter += 1
+
+        person = Person(
+            person_id=person_id,
+            name=name,
+            image_paths=image_paths,
+            created_at=datetime.now(),
+            last_seen=datetime.now()
+        )
+
+        self.people[person_id] = person
+        self.save()
+        return person_id
+
+    def get(self, person_id: str) -> Optional[Person]:
+        """Get person by ID"""
+        return self.people.get(person_id)
+
+    def update_name(self, person_id: str, name: str):
+        """Update person's name"""
+        if person_id in self.people:
+            self.people[person_id].name = name
+            self.save()
+
+    def add_image(self, person_id: str, image_path: str):
+        """Add image to person's collection"""
+        if person_id in self.people:
+            self.people[person_id].image_paths.append(image_path)
+
+            # Keep only last N images
+            if len(self.people[person_id].image_paths) > config.MAX_IMAGES_PER_PERSON:
+                # Remove oldest image file
+                old_path = Path(self.people[person_id].image_paths[0])
+                if old_path.exists():
+                    old_path.unlink()
+                self.people[person_id].image_paths = self.people[person_id].image_paths[-config.MAX_IMAGES_PER_PERSON:]
+
+            self.save()
+
+    def update_state(self, person_id: str, state: str):
+        """Update person's in/out state"""
+        if person_id in self.people:
+            self.people[person_id].state = state
+            self.people[person_id].last_seen = datetime.now()
+            self.save()
+
+    def get_unlabeled(self) -> List[Person]:
+        """Get all unlabeled people"""
+        return [p for p in self.people.values() if p.name is None]
+
+    def get_all(self) -> List[Person]:
+        """Get all people"""
+        return list(self.people.values())
+
+    def delete(self, person_id: str):
+        """Delete person"""
+        if person_id in self.people:
+            # Delete associated images
+            for img_path in self.people[person_id].image_paths:
+                path = Path(img_path)
+                if path.exists():
+                    path.unlink()
+
+            del self.people[person_id]
+            self.save()
+
+
+vector_db = VectorDatabase()
+metadata_db = MetadataDatabase()
+
+class Event:
+    event_id: str
+    person_id: str
+    direction: str  # "enter" or "leave"
+    timestamp: datetime
+    rpi_id: str
+    confidence: float
+
+class EventDatabase:
+    def __init__(self):
+        self.events = []
+    
+    def log_event(self, person_id, direction, rpi_id, confidence):
+        event = Event(
+            event_id=str(uuid.uuid4()),
+            person_id=person_id,
+            direction=direction,
+            timestamp=datetime.now(),
+            rpi_id=rpi_id,
+            confidence=confidence
+        )
+        self.events.append(event)
+    
+    def get_events(self, person_id=None, limit=50):
+        filtered = self.events
+        if person_id:
+            filtered = [e for e in filtered if e.person_id == person_id]
+        return sorted(filtered, key=lambda e: e.timestamp, reverse=True)[:limit]
