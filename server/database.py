@@ -22,16 +22,16 @@ class VectorDatabase:
         if config.VECTOR_DB_FILE.exists():
             with open(config.VECTOR_DB_FILE, 'r') as f:
                 self.vectors = json.load(f)
-            print(f"✅ Loaded {len(self.vectors)} vectors")
+            print(f"[Database] Loaded {len(self.vectors)} vectors")
         else:
             self.vectors = {}
-            print("📝 Created new vector database")
+            print("[Database] Created new vector database")
 
     def save(self):
         """Save vectors to JSON file"""
         with open(config.VECTOR_DB_FILE, 'w') as f:
             json.dump(self.vectors, f)
-        print(f"💾 Saved {len(self.vectors)} vectors")
+        # Saved silently - no log needed for every save
 
     def add(self, person_id: str, vector: np.ndarray):
         """Add or update vector for person"""
@@ -109,11 +109,11 @@ class MetadataDatabase:
                 self.people[person_id] = Person(**person_data, person_id=person_id)
 
             self.unknown_counter = data.get('unknown_counter', 0)
-            print(f"✅ Loaded {len(self.people)} people")
+            print(f"[Database] Loaded {len(self.people)} people")
         else:
             self.people = {}
             self.unknown_counter = 0
-            print("📝 Created new metadata database")
+            print("[Database] Created new metadata database")
 
     def save(self):
         """Save metadata to JSON file"""

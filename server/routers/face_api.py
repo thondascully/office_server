@@ -18,7 +18,7 @@ async def register_person(
     images: List[UploadFile] = File(...)
 ):
     """Register a new person with face recognition"""
-    print(f"\n📝 Registration: name={name}, rpi={rpi_id}, images={len(images)}")
+    print(f"[Registration] name={name}, rpi={rpi_id}, images={len(images)}")
 
     if len(images) == 0:
         raise HTTPException(status_code=400, detail="No images provided")
@@ -37,8 +37,12 @@ async def register_person(
     if len(cv_images) == 0:
         raise HTTPException(status_code=400, detail="Failed to decode any images")
 
-    # Generate mean embedding
-    mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
+    # Generate mean embedding (CPU-intensive, but shouldn't block server)
+    try:
+        mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
+    except Exception as e:
+        print(f"  Error computing embedding: {e}")
+        raise HTTPException(status_code=500, detail=f"Face recognition error: {str(e)}")
 
     if mean_embedding is None:
         raise HTTPException(status_code=400, detail="No faces detected in images")
@@ -54,7 +58,7 @@ async def register_person(
     # Store vector
     vector_db.add(person_id, mean_embedding)
 
-    print(f"✅ Registered: {person_id} (labeled={name is not None})")
+    print(f"[Registration] Registered: {person_id} (labeled={name is not None})")
 
     return {
         "status": "success",
@@ -79,7 +83,7 @@ async def handle_event(
     if len(images) == 0:
         raise HTTPException(status_code=400, detail="No images provided")
 
-    print(f"\n🚪 Event: {direction} from {rpi_id} at {timestamp}")
+    print(f"[Event] {direction} from {rpi_id} at {timestamp}")
 
     # Convert to OpenCV images
     cv_images = []
@@ -94,8 +98,12 @@ async def handle_event(
     if len(cv_images) == 0:
         raise HTTPException(status_code=400, detail="Failed to decode any images")
 
-    # Generate mean embedding
-    mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
+    # Generate mean embedding (CPU-intensive, but shouldn't block server)
+    try:
+        mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
+    except Exception as e:
+        print(f"  Error computing embedding: {e}")
+        raise HTTPException(status_code=500, detail=f"Face recognition error: {str(e)}")
 
     if mean_embedding is None:
         raise HTTPException(status_code=400, detail="No faces detected")
@@ -105,7 +113,7 @@ async def handle_event(
 
     if match_result is None:
         # Unknown person - auto-register
-        print("⚠️  Unknown person detected - auto-registering")
+        print("[Event] Unknown person detected - auto-registering")
 
         person_id = metadata_db.create_person(name=None)
 
@@ -142,7 +150,7 @@ async def handle_event(
         img_path = save_image(cv_images[0], person_id)
         metadata_db.add_image(person_id, img_path)
 
-    print(f"✅ {person_id}: {old_state} → {new_state} (sim: {similarity:.3f})")
+    print(f"[Event] {person_id}: {old_state} -> {new_state} (similarity: {similarity:.3f})")
 
     return {
         "status": "success",

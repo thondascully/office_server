@@ -108,11 +108,9 @@
         }
 
         .connection-status.server {
-            border-left: 3px solid var(--accent-blue);
         }
 
         .connection-status.rpi {
-            border-left: 3px solid var(--accent-orange);
         }
 
         .connection-dot {
@@ -1080,10 +1078,97 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Password Modal */
+        .password-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .password-modal.hidden {
+            display: none;
+        }
+
+        .password-box {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .password-box h2 {
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .password-box input {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .password-box input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .password-box button {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent-blue);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .password-box button:hover {
+            opacity: 0.9;
+        }
+
+        .password-error {
+            color: var(--accent-red);
+            font-size: 14px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .password-error.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <!-- Password Modal -->
+    <div class="password-modal" id="passwordModal">
+        <div class="password-box">
+            <h2>Enter Password</h2>
+            <input type="password" id="passwordInput" placeholder="Password" onkeypress="handlePasswordKeyPress(event)">
+            <button onclick="checkPassword()">Enter</button>
+            <div class="password-error" id="passwordError">Invalid password</div>
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer" style="display: none;">
         <!-- Header -->
         <div class="header">
             <div class="header-left">
@@ -1098,6 +1183,7 @@
                     <div class="connection-dot" id="serverConnectionDot"></div>
                     <span id="serverConnectionText">Server: Connected</span>
                 </div>
+                <button class="secondary" id="systemToggleBtn" onclick="toggleSystem()" style="margin-left: 8px;">Disable System</button>
                 <div class="theme-toggle" onclick="toggleTheme()">
                     <span id="themeIcon">☀️</span>
                 </div>
@@ -1121,11 +1207,6 @@
             <div class="stat-pill">
                 <span class="label">Vectors:</span>
                 <span class="value" id="vectorCount">0</span>
-            </div>
-            
-            <div class="rpi-status-badge" onclick="showRPiStatus()" title="Click for details">
-                <div class="status-dot" id="rpiStatusDot"></div>
-                <span id="rpiStatusText">Checking...</span>
             </div>
 
             <div class="auto-refresh-toggle" onclick="toggleAutoRefresh()">
@@ -1203,11 +1284,6 @@
                 <button onclick="viewCamera()">View Live</button>
                 <button onclick="registerViaRPi()">Register Person</button>
                 <button class="secondary" onclick="calibrateRPi()">Calibrate Tripwires</button>
-                <button class="secondary" onclick="refresh()">
-                    Refresh
-                    <span class="loading" id="loadingIndicator" style="display: none;"></span>
-                </button>
-                <button class="secondary" id="systemToggleBtn" onclick="toggleSystem()">Disable System</button>
             </div>
         </div>
 
@@ -1453,10 +1529,21 @@
             }
         }
 
-        // Check RPi Status
+        // Check RPi Status with timeout
         async function checkRPiStatus() {
             try {
-                const response = await fetch('/api/rpi/status');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+                
+                const response = await fetch('/api/rpi/status', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 updateServerConnectionStatus(true);
@@ -1470,6 +1557,9 @@
                     updateRPiConnectionStatus(false);
                 }
             } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('RPi status check error:', error);
+                }
                 updateServerConnectionStatus(false);
                 updateRPiConnectionStatus(false);
             }
@@ -1510,10 +1600,21 @@
             document.getElementById('rpiStatusModal').classList.remove('active');
         }
 
-        // Fetch Stats
+        // Fetch Stats with timeout
         async function fetchStats() {
             try {
-                const response = await fetch('/api/dashboard/stats');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+                
+                const response = await fetch('/api/dashboard/stats', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 document.getElementById('presentCount').textContent = data.people_present;
@@ -1523,6 +1624,9 @@
                 
                 updateConnectionStatus(true);
             } catch (error) {
+                if (error.name !== 'AbortError') {
+                    console.error('Fetch stats error:', error);
+                }
                 updateConnectionStatus(false);
             }
         }
@@ -1588,7 +1692,7 @@
                     <div class="activity-icon ${iconClass}"></div>
                     <div class="activity-text">
                         <div class="activity-name ${activity.is_labeled ? '' : 'unlabeled'}">
-                            ${activity.name || activity.person_id}
+                            ${activity.name || 'Unlabeled'}
                         </div>
                         <div>${actionText}</div>
                     </div>
@@ -1638,7 +1742,7 @@
                         ${person.thumbnail ? `<img src="${person.thumbnail}">` : ''}
                     </div>
                     <div class="present-info">
-                        <div class="present-name">${person.name || person.person_id}</div>
+                        <div class="present-name">${person.name || 'Unlabeled'}</div>
                         <div class="present-time">Entered ${enteredAgo}</div>
                     </div>
                 `;
@@ -1681,7 +1785,18 @@
         // Fetch Unlabeled
         async function fetchUnlabeled() {
             try {
-                const response = await fetch('/api/dashboard/people');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
+                const response = await fetch('/api/dashboard/people', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const people = await response.json();
                 const unlabeled = people.filter(p => !p.is_labeled);
                 
@@ -1703,14 +1818,28 @@
                     grid.appendChild(createPersonCard(person, true));
                 });
             } catch (error) {
-                showToast('Failed to fetch unlabeled people', 'error');
+                if (error.name !== 'AbortError') {
+                    console.error('Fetch unlabeled error:', error);
+                    showToast('Failed to fetch unlabeled people', 'error');
+                }
             }
         }
 
         // Fetch All People with filtering
         async function fetchAllPeople() {
             try {
-                const response = await fetch('/api/dashboard/people');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                
+                const response = await fetch('/api/dashboard/people', {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 allPeopleData = await response.json();
                 
                 filterPeople();
@@ -1720,7 +1849,10 @@
                 updateWhosHere(allPeopleData);
                 updateTodaySummary(allPeopleData);
             } catch (error) {
-                showToast('Failed to fetch people', 'error');
+                if (error.name !== 'AbortError') {
+                    console.error('Fetch people error:', error);
+                    showToast('Failed to fetch people', 'error');
+                }
             }
         }
 
@@ -1781,7 +1913,7 @@
                     <div class="image-count-badge">${person.image_count}</div>
                 </div>
                 <div class="card-name ${unlabeled ? 'unlabeled' : ''}">${person.name || 'Click to label'}</div>
-                <div class="card-id">${person.person_id}</div>
+                ${person.name ? `<div class="card-id">${person.person_id}</div>` : ''}
             `;
             
             return card;
@@ -1807,7 +1939,9 @@
         // Refresh
         async function refresh() {
             const indicator = document.getElementById('loadingIndicator');
-            indicator.style.display = 'inline-block';
+            if (indicator) {
+                indicator.style.display = 'inline-block';
+            }
             
             // Show loading states
             if (currentTab === 'people') {
@@ -1816,20 +1950,37 @@
                 showLoadingSkeletons('unlabeledGrid');
             }
             
-            await Promise.all([
-                fetchStats(),
-                checkRPiStatus(),
-                fetchAllPeople()
-            ]);
-            
-            // Refresh current tab
-            if (currentTab === 'unlabeled') {
-                await fetchUnlabeled();
-            } else if (currentTab === 'people') {
-                filterPeople();
+            try {
+                // Use Promise.allSettled so one failure doesn't block others
+                const results = await Promise.allSettled([
+                    fetchStats(),
+                    checkRPiStatus(),
+                    fetchAllPeople()
+                ]);
+                
+                // Log any failures
+                results.forEach((result, index) => {
+                    if (result.status === 'rejected') {
+                        const names = ['fetchStats', 'checkRPiStatus', 'fetchAllPeople'];
+                        console.error(`${names[index]} failed:`, result.reason);
+                    }
+                });
+                
+                // Refresh current tab (only if fetchAllPeople succeeded)
+                if (results[2].status === 'fulfilled') {
+                    if (currentTab === 'unlabeled') {
+                        await fetchUnlabeled();
+                    } else if (currentTab === 'people') {
+                        filterPeople();
+                    }
+                }
+            } catch (error) {
+                console.error('Refresh error:', error);
+            } finally {
+                if (indicator) {
+                    indicator.style.display = 'none';
+                }
             }
-            
-            indicator.style.display = 'none';
         }
 
         // Person Detail Modal
@@ -1837,7 +1988,7 @@
             currentPersonData = person;
             currentPersonId = person.person_id;
             
-            document.getElementById('detailId').textContent = person.person_id;
+            document.getElementById('detailId').textContent = person.name || person.person_id;
             document.getElementById('detailNameInput').value = person.name || '';
             document.getElementById('detailImageCount').textContent = person.image_count;
             document.getElementById('detailState').textContent = person.state;
@@ -2214,9 +2365,44 @@
             }
         }
 
-        // Initial load
-        refresh();
-        startAutoRefresh();
+        // Password Protection
+        function checkPassword() {
+            const input = document.getElementById('passwordInput');
+            const password = input.value;
+            const errorDiv = document.getElementById('passwordError');
+            
+            // Check if last 3 characters are "0"
+            if (password.length >= 3 && password.slice(-3) === '000') {
+                // Valid password
+                document.getElementById('passwordModal').classList.add('hidden');
+                document.getElementById('mainContainer').style.display = 'block';
+                // Initial load after password is correct - don't wait, render immediately
+                startAutoRefresh(); // Start auto-refresh immediately
+                // Load data asynchronously without blocking
+                setTimeout(() => {
+                    refresh().catch(err => console.error('Initial refresh failed:', err));
+                }, 100); // Small delay to ensure DOM is ready
+            } else {
+                // Invalid password
+                errorDiv.classList.add('show');
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        function handlePasswordKeyPress(event) {
+            if (event.key === 'Enter') {
+                checkPassword();
+            }
+        }
+
+        // Focus password input on load
+        window.addEventListener('load', () => {
+            const passwordInput = document.getElementById('passwordInput');
+            if (passwordInput) {
+                passwordInput.focus();
+            }
+        });
     </script>
 </body>
 </html>

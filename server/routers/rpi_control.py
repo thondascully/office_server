@@ -23,7 +23,9 @@ async def start_stream(request: Request):
     data = await request.json()
     rpi_id = data.get('rpi_id', 'default')
 
+    print(f"[RPi Control] Setting 'start_stream' command for RPi '{rpi_id}'")
     rpi_manager.set_command(rpi_id, "start_stream")
+    print(f"[RPi Control] Command queued. RPi '{rpi_id}' should poll /api/rpi/commands/{rpi_id} to receive it.")
     return {"status": "success", "message": f"Stream started for {rpi_id}"}
 
 @router.post("/stop-stream")

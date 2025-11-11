@@ -22,18 +22,24 @@ async def dashboard(request: Request):
 @router.get("/api/dashboard/stats")
 async def get_stats():
     """Get dashboard statistics"""
-    all_people = metadata_db.get_all()
-    present = [p for p in all_people if p.state == "in"]
-    unlabeled = metadata_db.get_unlabeled()
-    active_rpis = rpi_manager.get_active_rpis()
+    try:
+        all_people = metadata_db.get_all()
+        present = [p for p in all_people if p.state == "in"]
+        unlabeled = metadata_db.get_unlabeled()
+        active_rpis = rpi_manager.get_active_rpis()
 
-    return {
-        "total_people": len(all_people),
-        "people_present": len(present),
-        "unlabeled_count": len(unlabeled),
-        "vector_count": len(vector_db.vectors),
-        "connected_rpis": active_rpis
-    }
+        return {
+            "total_people": len(all_people),
+            "people_present": len(present),
+            "unlabeled_count": len(unlabeled),
+            "vector_count": len(vector_db.vectors),
+            "connected_rpis": active_rpis
+        }
+    except Exception as e:
+        import traceback
+        print(f"Error in get_stats: {e}")
+        traceback.print_exc()
+        raise
 
 
 @router.get("/api/dashboard/people")
@@ -45,9 +51,12 @@ async def get_all_people():
     for person in people:
         thumbnail = None
         if person.image_paths:
-            img_path = person.image_paths[-1]
-            if Path(img_path).exists():
-                thumbnail = f"/static/images/{Path(img_path).name}"
+            try:
+                img_path = person.image_paths[-1]
+                if img_path and Path(img_path).exists():
+                    thumbnail = f"/static/images/{Path(img_path).name}"
+            except Exception:
+                pass  # Skip thumbnail if there's an error
 
         result.append({
             "person_id": person.person_id,

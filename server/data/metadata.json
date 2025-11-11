@@ -1,20 +1,20 @@
 {
   "people": {
-    "unknown_011": {
-      "person_id": "unknown_011",
-      "name": "Teo",
+    "unknown_012": {
+      "person_id": "unknown_012",
+      "name": "Teooo",
       "image_paths": [
-        "/Users/thondascully/all/office_map_project/server/static/images/unknown_011_20251110_155647_657304.jpg",
-        "/Users/thondascully/all/office_map_project/server/static/images/unknown_011_20251110_155700_606097.jpg",
-        "/Users/thondascully/all/office_map_project/server/static/images/unknown_011_20251110_155707_227676.jpg",
-        "/Users/thondascully/all/office_map_project/server/static/images/unknown_011_20251110_155713_702465.jpg",
-        "/Users/thondascully/all/office_map_project/server/static/images/unknown_011_20251110_155720_383023.jpg",
-        "/Users/thondascully/all/office_map_project/server/static/images/unknown_011_20251110_155754_292497.jpg"
+        "/Users/thondascully/all/office_map_project/server/static/images/unknown_012_20251110_173516_742880.jpg",
+        "/Users/thondascully/all/office_map_project/server/static/images/unknown_012_20251110_173523_531637.jpg",
+        "/Users/thondascully/all/office_map_project/server/static/images/unknown_012_20251110_173530_540323.jpg",
+        "/Users/thondascully/all/office_map_project/server/static/images/unknown_012_20251110_173537_412092.jpg",
+        "/Users/thondascully/all/office_map_project/server/static/images/unknown_012_20251110_173543_893949.jpg",
+        "/Users/thondascully/all/office_map_project/server/static/images/unknown_012_20251110_173550_940195.jpg"
       ],
-      "created_at": "2025-11-10T15:56:47.657047",
-      "last_seen": "2025-11-10T15:57:54.292241",
+      "created_at": "2025-11-10T17:35:16.742635",
+      "last_seen": "2025-11-10T17:35:50.939936",
       "state": "in"
     }
   },
-  "unknown_counter": 11
+  "unknown_counter": 12
 }

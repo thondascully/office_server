@@ -58,8 +58,11 @@ class RPiManager:
             return None
 
         frame_data = self.stream_frames[rpi_id]
-        # Check if frame is recent (within 2 seconds)
-        if (datetime.now() - frame_data['timestamp']).total_seconds() > 2:
+        # Check if frame is recent (within 5 seconds - increased from 2 for network delays)
+        age_seconds = (datetime.now() - frame_data['timestamp']).total_seconds()
+        if age_seconds > 5:
+            # Frame expired, remove it
+            del self.stream_frames[rpi_id]
             return None
 
         return frame_data

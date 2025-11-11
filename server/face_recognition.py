@@ -12,14 +12,14 @@ class FaceRecognizer:
     """ArcFace-based face recognition"""
 
     def __init__(self):
-        print("🧠 Loading ArcFace model...")
+        print("[Face Recognition] Loading ArcFace model...")
         self.arcface_session = ort.InferenceSession(
             str(config.ARCFACE_MODEL),
             providers=['CPUExecutionProvider']
         )
 
         self.face_cascade = cv2.CascadeClassifier(str(config.HAAR_CASCADE))
-        print("✅ Face recognition loaded")
+        print("[Face Recognition] Model loaded successfully")
 
     def detect_face(self, image: np.ndarray) -> Optional[np.ndarray]:
         """Detect and extract largest face"""
@@ -89,7 +89,8 @@ class FaceRecognizer:
         mean_embedding = np.mean(embeddings, axis=0)
         mean_embedding_normalized = mean_embedding / np.linalg.norm(mean_embedding)
 
-        print(f"  Generated mean embedding from {len(embeddings)}/{len(images)} images")
+        # Log embedding generation (only if verbose logging needed)
+        # print(f"[Face Recognition] Generated mean embedding from {len(embeddings)}/{len(images)} images")
         return mean_embedding_normalized
 
 

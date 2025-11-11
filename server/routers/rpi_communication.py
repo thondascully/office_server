@@ -25,6 +25,8 @@ async def rpi_heartbeat(request: Request):
 async def get_rpi_commands(rpi_id: str):
     """RPi polls this to get commands from dashboard"""
     command, params = rpi_manager.get_command(rpi_id)
+    if command:
+        print(f"[RPi Comm] RPi '{rpi_id}' received command: {command} (params: {params})")
     return {"command": command, "params": params}
 
 @router.get("/config/{rpi_id}")
@@ -49,9 +51,25 @@ async def update_rpi_config(rpi_id: str, request: Request):
 @router.post("/stream/{rpi_id}")
 async def receive_stream_frame(rpi_id: str, request: Request):
     """Receive stream frame from RPi"""
-    image_bytes = await request.body()
-    rpi_manager.update_stream_frame(rpi_id, image_bytes)
-    return {"status": "ok"}
+    try:
+        # Set a timeout to prevent hanging on large images
+        image_bytes = await request.body()
+        # Limit image size to prevent memory issues (10MB max)
+        if len(image_bytes) > 10 * 1024 * 1024:
+            print(f"[RPi Stream] WARNING: Frame from {rpi_id} too large: {len(image_bytes)} bytes")
+            return {"status": "error", "message": "Image too large"}
+        rpi_manager.update_stream_frame(rpi_id, image_bytes)
+        # Log first frame to confirm streaming started
+        if not hasattr(receive_stream_frame, '_logged'):
+            receive_stream_frame._logged = set()
+        if rpi_id not in receive_stream_frame._logged:
+            print(f"[RPi Stream] First frame received from {rpi_id} ({len(image_bytes)} bytes) - streaming active")
+            receive_stream_frame._logged.add(rpi_id)
+        return {"status": "ok"}
+    except Exception as e:
+        # Don't let stream errors crash the server
+        print(f"[RPi Stream] ERROR: Frame error from {rpi_id}: {e}")
+        return {"status": "error", "message": str(e)}
 
 @router.get("/stream/{rpi_id}")
 async def get_stream_frame(rpi_id: str):
@@ -59,7 +77,18 @@ async def get_stream_frame(rpi_id: str):
     frame_data = rpi_manager.get_stream_frame(rpi_id)
 
     if frame_data is None:
-        raise HTTPException(status_code=404, detail="No stream available or expired")
+        # Check if RPi is connected but not streaming
+        if rpi_id in rpi_manager.connected_rpis:
+            # RPi is connected but no recent frames - it may not have started streaming yet
+            raise HTTPException(
+                status_code=404, 
+                detail=f"RPi '{rpi_id}' connected but not sending stream frames. Check RPi logs."
+            )
+        else:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"RPi '{rpi_id}' not connected or stream expired"
+            )
 
     return Response(content=frame_data['data'], media_type="image/jpeg")
 
