@@ -52,6 +52,6 @@ ENV PYTHONPATH=/app
 
 # Run the server using uvicorn directly for better production performance
 # Railway sets PORT automatically, use it or default to 8000
-# Use --timeout-keep-alive to prevent connection issues
-CMD ["sh", "-c", "cd /app && exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 30"]
+# Increase timeouts for face recognition operations (can take 30-60 seconds)
+CMD ["sh", "-c", "cd /app && exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 120 --timeout-graceful-shutdown 10"]
 

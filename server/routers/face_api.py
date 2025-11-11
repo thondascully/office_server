@@ -83,30 +83,48 @@ async def handle_event(
     if len(images) == 0:
         raise HTTPException(status_code=400, detail="No images provided")
 
-    print(f"[Event] {direction} from {rpi_id} at {timestamp}")
+    print(f"[Event] {direction} from {rpi_id} at {timestamp}, {len(images)} images")
 
     # Convert to OpenCV images
     cv_images = []
-    for upload_file in images:
-        image_bytes = await upload_file.read()
+    decode_errors = 0
+    for i, upload_file in enumerate(images):
         try:
+            image_bytes = await upload_file.read()
+            if len(image_bytes) == 0:
+                decode_errors += 1
+                continue
             img = bytes_to_image(image_bytes)
             cv_images.append(img)
         except Exception as e:
+            decode_errors += 1
+            print(f"  Failed to decode image {i+1}/{len(images)}: {e}")
             continue
 
     if len(cv_images) == 0:
-        raise HTTPException(status_code=400, detail="Failed to decode any images")
+        error_msg = f"Failed to decode any images from {len(images)} uploaded (decode errors: {decode_errors})"
+        print(f"[Event] ERROR: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    print(f"[Event] Successfully decoded {len(cv_images)}/{len(images)} images")
 
     # Generate mean embedding (CPU-intensive, but shouldn't block server)
+    print(f"[Event] Computing face embedding from {len(cv_images)} images...")
     try:
         mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
     except Exception as e:
-        print(f"  Error computing embedding: {e}")
-        raise HTTPException(status_code=500, detail=f"Face recognition error: {str(e)}")
+        error_msg = f"Face recognition error: {str(e)}"
+        print(f"[Event] ERROR: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
 
     if mean_embedding is None:
-        raise HTTPException(status_code=400, detail="No faces detected")
+        error_msg = "No faces detected in any of the images"
+        print(f"[Event] ERROR: {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    print(f"[Event] Face embedding computed successfully")
 
     # Search for match
     match_result = vector_db.search(mean_embedding)
