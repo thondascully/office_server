@@ -31,7 +31,10 @@ SIMILARITY_THRESHOLD = 0.5
 MIN_FACE_SIZE = (30, 30)
 # Resize images to this max dimension before face detection (faster processing)
 # Face detection runs on this smaller image, then crops/resizes to 112x112 for model
-DETECTION_MAX_WIDTH = 800  # Resize to max 800px width (maintains aspect ratio)
+# Note: Lower values = faster but may miss small faces. 1200 is a good balance for accuracy.
+# Increase to 1600+ if faces are being missed, decrease to 600-800 for maximum speed.
+# Set to None or very large number (e.g., 9999) to disable resize optimization
+DETECTION_MAX_WIDTH = None  # Disabled temporarily - set to 1200 or 1600 to enable
 
 # Server settings
 HOST = os.getenv("HOST", "0.0.0.0")

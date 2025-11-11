@@ -43,28 +43,59 @@ class FaceRecognizer:
         """
         # Resize image for faster face detection (maintains aspect ratio)
         original_height, original_width = image.shape[:2]
-        if original_width > config.DETECTION_MAX_WIDTH:
+        
+        # Only resize if DETECTION_MAX_WIDTH is set and image is larger
+        if config.DETECTION_MAX_WIDTH and original_width > config.DETECTION_MAX_WIDTH:
             scale = config.DETECTION_MAX_WIDTH / original_width
             new_width = config.DETECTION_MAX_WIDTH
             new_height = int(original_height * scale)
             detection_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+            print(f"[Face Recognition] Resized: {original_width}x{original_height} -> {new_width}x{new_height} (scale: {scale:.3f})")
         else:
             detection_image = image
             scale = 1.0
+            print(f"[Face Recognition] Using original size: {original_width}x{original_height}")
 
         # Face detection on resized image (much faster)
         gray = cv2.cvtColor(detection_image, cv2.COLOR_BGR2GRAY)
         
         # Scale min face size for resized image
-        min_size_scaled = (int(config.MIN_FACE_SIZE[0] * scale), int(config.MIN_FACE_SIZE[1] * scale))
+        # After resizing, faces become smaller proportionally, so min size should scale down
+        # But don't go below 15px (too small = false positives)
+        if scale < 1.0:
+            min_size_scaled = (
+                max(15, int(config.MIN_FACE_SIZE[0] * scale)), 
+                max(15, int(config.MIN_FACE_SIZE[1] * scale))
+            )
+        else:
+            min_size_scaled = config.MIN_FACE_SIZE
+        
+        print(f"[Face Recognition] Detection: image={detection_image.shape[1]}x{detection_image.shape[0]}, min_size={min_size_scaled}")
+        
+        # Try detection with scaled min size
         faces = self.face_cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
             minNeighbors=5,
             minSize=min_size_scaled
         )
+        
+        print(f"[Face Recognition] First attempt: found {len(faces)} faces")
+
+        # If no faces found, try with even smaller min size (more lenient fallback)
+        if len(faces) == 0:
+            min_size_fallback = (10, 10)  # Very small minimum
+            print(f"[Face Recognition] Retrying with min_size={min_size_fallback}")
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=4,  # Slightly more lenient
+                minSize=min_size_fallback
+            )
+            print(f"[Face Recognition] Fallback attempt: found {len(faces)} faces")
 
         if len(faces) == 0:
+            print(f"[Face Recognition] No faces detected in {detection_image.shape[1]}x{detection_image.shape[0]} image")
             return None
 
         # Use largest face
@@ -114,9 +145,10 @@ class FaceRecognizer:
         Optimized: stops early once we have enough good embeddings (min_embeddings)
         """
         embeddings = []
+        failed_count = 0
         
         # Process images until we have enough good embeddings
-        for img in images:
+        for i, img in enumerate(images):
             embedding = self.get_embedding(img)
             if embedding is not None:
                 embeddings.append(embedding)
@@ -126,8 +158,12 @@ class FaceRecognizer:
                     # For 5 images, stop after 3-4 good embeddings (faster, still accurate)
                     if len(images) <= 5:
                         break
+            else:
+                failed_count += 1
 
         if len(embeddings) == 0:
+            # Log why no embeddings were found
+            print(f"[Face Recognition] No faces detected in any of {len(images)} images (failed: {failed_count})")
             return None
 
         mean_embedding = np.mean(embeddings, axis=0)
