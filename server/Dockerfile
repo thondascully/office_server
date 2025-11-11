@@ -26,6 +26,16 @@ COPY . .
 # Create necessary directories if they don't exist
 RUN mkdir -p data static/images static/exports models
 
+# Download required models
+RUN echo "Downloading face recognition models..." && \
+    curl -L --progress-bar \
+        -o models/arcfaceresnet100-8.onnx \
+        "https://github.com/onnx/models/raw/main/validated/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx" && \
+    curl -L --progress-bar \
+        -o models/haarcascade_frontalface_default.xml \
+        "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml" && \
+    echo "Models downloaded successfully"
+
 # Expose the port the app runs on
 EXPOSE 8000
 

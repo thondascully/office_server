@@ -13,13 +13,28 @@ class FaceRecognizer:
 
     def __init__(self):
         print("[Face Recognition] Loading ArcFace model...")
-        self.arcface_session = ort.InferenceSession(
-            str(config.ARCFACE_MODEL),
-            providers=['CPUExecutionProvider']
-        )
-
-        self.face_cascade = cv2.CascadeClassifier(str(config.HAAR_CASCADE))
-        print("[Face Recognition] Model loaded successfully")
+        
+        # Check if model files exist
+        if not config.ARCFACE_MODEL.exists():
+            raise FileNotFoundError(
+                f"ArcFace model not found at {config.ARCFACE_MODEL}. "
+                "Please download models using download_models.sh or ensure models are in the Docker image."
+            )
+        if not config.HAAR_CASCADE.exists():
+            raise FileNotFoundError(
+                f"Haar Cascade not found at {config.HAAR_CASCADE}. "
+                "Please download models using download_models.sh or ensure models are in the Docker image."
+            )
+        
+        try:
+            self.arcface_session = ort.InferenceSession(
+                str(config.ARCFACE_MODEL),
+                providers=['CPUExecutionProvider']
+            )
+            self.face_cascade = cv2.CascadeClassifier(str(config.HAAR_CASCADE))
+            print("[Face Recognition] Model loaded successfully")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load face recognition models: {e}")
 
     def detect_face(self, image: np.ndarray) -> Optional[np.ndarray]:
         """Detect and extract largest face"""
