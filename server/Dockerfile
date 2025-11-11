@@ -53,5 +53,6 @@ ENV PYTHONPATH=/app
 
 # Run the server using uvicorn directly for better production performance
 # Use PORT environment variable if set, otherwise default to 8000
-CMD ["sh", "-c", "cd /app && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Add debugging to see what's in /app
+CMD ["sh", "-c", "echo '=== Debugging container contents ===' && ls -la /app/ && echo '=== Checking for main.py ===' && test -f /app/main.py && echo 'main.py exists' || echo 'main.py NOT FOUND' && echo '=== Python path ===' && python -c 'import sys; print(sys.path)' && echo '=== Starting server ===' && cd /app && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
