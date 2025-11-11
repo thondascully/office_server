@@ -2,7 +2,7 @@
 RPi State Management Service
 Centralized management of connected RPi devices
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional
 import yaml
 from pathlib import Path
@@ -22,7 +22,7 @@ class RPiManager:
         if rpi_id not in self.connected_rpis:
             self.connected_rpis[rpi_id] = {}
 
-        self.connected_rpis[rpi_id]['last_seen'] = datetime.now()
+        self.connected_rpis[rpi_id]['last_seen'] = datetime.now(timezone.utc)
         self.connected_rpis[rpi_id]['status'] = status
         self.connected_rpis[rpi_id]['uptime'] = uptime
 
@@ -49,7 +49,7 @@ class RPiManager:
         """Update stream frame for RPi"""
         self.stream_frames[rpi_id] = {
             'data': image_bytes,
-            'timestamp': datetime.now()
+            'timestamp': datetime.now(timezone.utc)
         }
 
     def get_stream_frame(self, rpi_id: str) -> Optional[dict]:
@@ -75,7 +75,7 @@ class RPiManager:
     def get_active_rpis(self, timeout_seconds: int = 60) -> list:
         """Get list of active RPis"""
         active = []
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         for rpi_id, info in self.connected_rpis.items():
             last_seen = info.get('last_seen')
             if last_seen and (current_time - last_seen).total_seconds() < timeout_seconds:
@@ -93,7 +93,7 @@ class RPiManager:
         if not last_seen:
             return None
 
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         is_streaming = rpi_id in self.stream_frames and \
                       (current_time - self.stream_frames[rpi_id]['timestamp']).total_seconds() < 2
 

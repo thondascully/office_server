@@ -13,6 +13,10 @@ class Person(BaseModel):
     created_at: datetime
     last_seen: datetime
     state: str = "out"  # "in" or "out"
+    entered_at: Optional[datetime] = None  # When they entered (None if out)
+    last_similarity: Optional[float] = None  # Last recognition confidence score
+    visit_count: int = 0  # Number of times they've entered
+    last_exit: Optional[datetime] = None  # When they last left
 
 class DetectionEvent(BaseModel):
     timestamp: datetime

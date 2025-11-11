@@ -5,7 +5,7 @@ Database Management - File-based vector and metadata storage
 import json
 import numpy as np
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 import config
 from models import Person
@@ -104,6 +104,18 @@ class MetadataDatabase:
                 # Convert string timestamps back to datetime
                 person_data['created_at'] = datetime.fromisoformat(person_data['created_at'])
                 person_data['last_seen'] = datetime.fromisoformat(person_data['last_seen'])
+                # Handle entered_at (may not exist in old data)
+                if 'entered_at' in person_data and person_data['entered_at']:
+                    person_data['entered_at'] = datetime.fromisoformat(person_data['entered_at'])
+                else:
+                    person_data['entered_at'] = None
+                # Handle last_similarity, visit_count, last_exit (may not exist in old data)
+                person_data.setdefault('last_similarity', None)
+                person_data.setdefault('visit_count', 0)
+                if 'last_exit' in person_data and person_data['last_exit']:
+                    person_data['last_exit'] = datetime.fromisoformat(person_data['last_exit'])
+                else:
+                    person_data['last_exit'] = None
                 # Remove person_id from person_data if it exists to avoid duplicate
                 person_data.pop('person_id', None)
                 self.people[person_id] = Person(**person_data, person_id=person_id)
@@ -127,6 +139,8 @@ class MetadataDatabase:
             # Convert datetime to string for JSON
             person_dict['created_at'] = person.created_at.isoformat()
             person_dict['last_seen'] = person.last_seen.isoformat()
+            person_dict['entered_at'] = person.entered_at.isoformat() if person.entered_at else None
+            person_dict['last_exit'] = person.last_exit.isoformat() if person.last_exit else None
             data['people'][person_id] = person_dict
 
         with open(config.METADATA_FILE, 'w') as f:
@@ -152,8 +166,8 @@ class MetadataDatabase:
             person_id=person_id,
             name=name,
             image_paths=image_paths,
-            created_at=datetime.now(),
-            last_seen=datetime.now()
+            created_at=datetime.now(timezone.utc),
+            last_seen=datetime.now(timezone.utc)
         )
 
         self.people[person_id] = person
@@ -185,11 +199,25 @@ class MetadataDatabase:
 
             self.save()
 
-    def update_state(self, person_id: str, state: str):
+    def update_state(self, person_id: str, state: str, similarity: Optional[float] = None):
         """Update person's in/out state"""
         if person_id in self.people:
+            old_state = self.people[person_id].state
             self.people[person_id].state = state
-            self.people[person_id].last_seen = datetime.now()
+            self.people[person_id].last_seen = datetime.now(timezone.utc)
+            
+            # Store recognition confidence if provided
+            if similarity is not None:
+                self.people[person_id].last_similarity = similarity
+            
+            # Track when they entered (when state changes from out to in)
+            if old_state == "out" and state == "in":
+                self.people[person_id].entered_at = datetime.now(timezone.utc)
+                self.people[person_id].visit_count += 1
+            elif state == "out":
+                self.people[person_id].entered_at = None
+                self.people[person_id].last_exit = datetime.now(timezone.utc)
+            
             self.save()
 
     def get_unlabeled(self) -> List[Person]:

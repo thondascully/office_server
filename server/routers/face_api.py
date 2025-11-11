@@ -154,7 +154,7 @@ async def handle_event(
         vector_db.add(person_id, mean_embedding)
 
         new_state = "in" if direction == "enter" else "out"
-        metadata_db.update_state(person_id, new_state)
+        metadata_db.update_state(person_id, new_state, similarity=0.0)
 
         return {
             "status": "unknown_registered",
@@ -172,7 +172,7 @@ async def handle_event(
     # Update state
     new_state = "in" if direction == "enter" else "out"
     old_state = person.state if person else "unknown"
-    metadata_db.update_state(person_id, new_state)
+    metadata_db.update_state(person_id, new_state, similarity=similarity)
 
     # Save additional sample image
     if person and len(person.image_paths) < config.MAX_IMAGES_PER_PERSON:

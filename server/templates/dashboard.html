@@ -1330,6 +1330,34 @@
                         <label>Last Seen:</label>
                         <span class="value" id="detailLastSeen"></span>
                     </div>
+                    <div class="person-detail-field">
+                        <label>First Registered:</label>
+                        <span class="value" id="detailCreatedAt"></span>
+                    </div>
+                    <div class="person-detail-field" id="detailEnteredAtField" style="display: none;">
+                        <label>Entered At:</label>
+                        <span class="value" id="detailEnteredAt"></span>
+                    </div>
+                    <div class="person-detail-field" id="detailTimeInOfficeField" style="display: none;">
+                        <label>Time In Office:</label>
+                        <span class="value" id="detailTimeInOffice"></span>
+                    </div>
+                    <div class="person-detail-field" id="detailLastExitField" style="display: none;">
+                        <label>Last Exit:</label>
+                        <span class="value" id="detailLastExit"></span>
+                    </div>
+                    <div class="person-detail-field">
+                        <label>Total Visits:</label>
+                        <span class="value" id="detailVisitCount">0</span>
+                    </div>
+                    <div class="person-detail-field" id="detailSimilarityField" style="display: none;">
+                        <label>Last Recognition Confidence:</label>
+                        <span class="value" id="detailSimilarity"></span>
+                    </div>
+                    <div class="person-detail-field">
+                        <label>Days Since First Seen:</label>
+                        <span class="value" id="detailDaysSince"></span>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions">
@@ -1750,9 +1778,9 @@
                 div.className = 'present-person';
                 div.onclick = () => openPersonModal(person);
                 
-                // Parse ISO timestamp correctly (handles timezone issues)
-                const lastSeenTime = new Date(person.last_seen).getTime();
-                const enteredAgo = getTimeAgo(lastSeenTime);
+                // Use entered_at if available (when they actually entered), otherwise fall back to last_seen
+                const entryTime = person.entered_at ? new Date(person.entered_at).getTime() : new Date(person.last_seen).getTime();
+                const enteredAgo = getTimeAgo(entryTime);
                 
                 div.innerHTML = `
                     <div class="present-avatar">
@@ -2014,9 +2042,77 @@
             document.getElementById('detailNameInput').value = person.name || '';
             document.getElementById('detailImageCount').textContent = person.image_count;
             document.getElementById('detailState').textContent = person.state;
-            // Parse ISO timestamp and display in local timezone
+            
+            // Parse ISO timestamp and display in local timezone (ensure correct timezone handling)
+            // ISO strings with 'Z' or timezone info are parsed correctly by JavaScript
             const lastSeenDate = new Date(person.last_seen);
-            document.getElementById('detailLastSeen').textContent = lastSeenDate.toLocaleString();
+            const options = { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: true,
+                timeZoneName: 'short'
+            };
+            document.getElementById('detailLastSeen').textContent = lastSeenDate.toLocaleString(undefined, options);
+            
+            // Show created_at (first registration)
+            if (person.created_at) {
+                const createdDate = new Date(person.created_at);
+                document.getElementById('detailCreatedAt').textContent = createdDate.toLocaleString(undefined, options);
+                
+                // Calculate days since first seen
+                const now = Date.now();
+                const createdTime = createdDate.getTime();
+                const daysSince = Math.floor((now - createdTime) / (1000 * 60 * 60 * 24));
+                document.getElementById('detailDaysSince').textContent = daysSince;
+            }
+            
+            // Show visit count
+            document.getElementById('detailVisitCount').textContent = person.visit_count || 0;
+            
+            // Show last similarity (recognition confidence)
+            const similarityField = document.getElementById('detailSimilarityField');
+            if (person.last_similarity !== null && person.last_similarity !== undefined) {
+                const similarityPercent = (person.last_similarity * 100).toFixed(1);
+                document.getElementById('detailSimilarity').textContent = `${similarityPercent}%`;
+                similarityField.style.display = 'block';
+            } else {
+                similarityField.style.display = 'none';
+            }
+            
+            // Show entered_at and time in office if person is currently in
+            const enteredAtField = document.getElementById('detailEnteredAtField');
+            const timeInOfficeField = document.getElementById('detailTimeInOfficeField');
+            if (person.state === 'in' && person.entered_at) {
+                const enteredDate = new Date(person.entered_at);
+                document.getElementById('detailEnteredAt').textContent = enteredDate.toLocaleString(undefined, options);
+                enteredAtField.style.display = 'block';
+                
+                // Calculate time in office
+                const now = Date.now();
+                const enteredTime = enteredDate.getTime();
+                const minutesInOffice = Math.floor((now - enteredTime) / 60000);
+                const hours = Math.floor(minutesInOffice / 60);
+                const minutes = minutesInOffice % 60;
+                const timeInOfficeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                document.getElementById('detailTimeInOffice').textContent = timeInOfficeText;
+                timeInOfficeField.style.display = 'block';
+            } else {
+                enteredAtField.style.display = 'none';
+                timeInOfficeField.style.display = 'none';
+            }
+            
+            // Show last exit if person is out
+            const lastExitField = document.getElementById('detailLastExitField');
+            if (person.state === 'out' && person.last_exit) {
+                const lastExitDate = new Date(person.last_exit);
+                document.getElementById('detailLastExit').textContent = lastExitDate.toLocaleString(undefined, options);
+                lastExitField.style.display = 'block';
+            } else {
+                lastExitField.style.display = 'none';
+            }
             
             if (person.thumbnail) {
                 document.getElementById('detailImage').src = person.thumbnail;

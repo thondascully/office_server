@@ -65,6 +65,11 @@ async def get_all_people():
             "image_count": len(person.image_paths),
             "thumbnail": thumbnail,
             "last_seen": person.last_seen.isoformat(),
+            "entered_at": person.entered_at.isoformat() if person.entered_at else None,
+            "created_at": person.created_at.isoformat(),
+            "last_exit": person.last_exit.isoformat() if person.last_exit else None,
+            "last_similarity": person.last_similarity,
+            "visit_count": person.visit_count,
             "is_labeled": person.name is not None
         })
 

@@ -5,7 +5,7 @@ Handles communication between RPi devices and server
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import Response
 from services.rpi_manager import rpi_manager
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -19,7 +19,7 @@ async def rpi_heartbeat(request: Request):
 
     rpi_manager.update_heartbeat(rpi_id, status, uptime)
 
-    return {"status": "ok", "server_time": datetime.now().isoformat()}
+    return {"status": "ok", "server_time": datetime.now(timezone.utc).isoformat()}
 
 @router.get("/commands/{rpi_id}")
 async def get_rpi_commands(rpi_id: str):
