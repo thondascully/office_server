@@ -1833,14 +1833,6 @@
                         <label>State:</label>
                         <span class="value" id="detailState"></span>
                     </div>
-                    <div class="person-detail-field">
-                        <label>Last Seen:</label>
-                        <span class="value" id="detailLastSeen"></span>
-                    </div>
-                    <div class="person-detail-field">
-                        <label>First Registered:</label>
-                        <span class="value" id="detailCreatedAt"></span>
-                    </div>
                     <div class="person-detail-field" id="detailEnteredAtField" style="display: none;">
                         <label>Entered At:</label>
                         <span class="value" id="detailEnteredAt"></span>
@@ -1856,10 +1848,6 @@
                     <div class="person-detail-field" id="detailSimilarityField" style="display: none;">
                         <label>Last Recognition Confidence:</label>
                         <span class="value" id="detailSimilarity"></span>
-                    </div>
-                    <div class="person-detail-field">
-                        <label>Images:</label>
-                        <span class="value" id="detailImageCount"></span>
                     </div>
                 </div>
             </div>
@@ -2730,12 +2718,10 @@
             
             document.getElementById('detailId').textContent = person.name || person.person_id;
             document.getElementById('detailNameInput').value = person.name || '';
-            document.getElementById('detailImageCount').textContent = person.image_count;
             document.getElementById('detailState').textContent = person.state;
             
             // Parse ISO timestamp and display in local timezone (ensure correct timezone handling)
             // ISO strings with 'Z' or timezone info are parsed correctly by JavaScript
-            const lastSeenDate = new Date(person.last_seen);
             const options = { 
                 year: 'numeric', 
                 month: 'short', 
@@ -2745,13 +2731,6 @@
                 hour12: true,
                 timeZoneName: 'short'
             };
-            document.getElementById('detailLastSeen').textContent = lastSeenDate.toLocaleString(undefined, options);
-            
-            // Show created_at (first registration)
-            if (person.created_at) {
-                const createdDate = new Date(person.created_at);
-                document.getElementById('detailCreatedAt').textContent = createdDate.toLocaleString(undefined, options);
-            }
             
             // Show last similarity (recognition confidence)
             const similarityField = document.getElementById('detailSimilarityField');
