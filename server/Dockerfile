@@ -21,7 +21,7 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire server directory
+# Copy the entire server directory (context is already server/, so COPY . . copies server contents)
 COPY . .
 
 # Create necessary directories if they don't exist
@@ -44,7 +44,14 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 
+# Verify main.py exists (for debugging)
+RUN ls -la /app/ | head -20 && \
+    test -f /app/main.py && echo "main.py found" || echo "ERROR: main.py not found"
+
+# Set PYTHONPATH environment variable
+ENV PYTHONPATH=/app
+
 # Run the server using uvicorn directly for better production performance
 # Use PORT environment variable if set, otherwise default to 8000
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+CMD ["sh", "-c", "cd /app && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
