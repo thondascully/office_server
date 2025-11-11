@@ -72,27 +72,42 @@ class FaceRecognizer:
         
         print(f"[Face Recognition] Detection: image={detection_image.shape[1]}x{detection_image.shape[0]}, min_size={min_size_scaled}")
         
-        # Try detection with scaled min size
+        # Try detection with multiple strategies (most lenient first for speed)
+        # Strategy 1: More lenient parameters (faster, catches more faces)
         faces = self.face_cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=min_size_scaled
+            minNeighbors=3,  # Lower = more lenient (was 5)
+            minSize=min_size_scaled,
+            flags=cv2.CASCADE_SCALE_IMAGE
         )
         
-        print(f"[Face Recognition] First attempt: found {len(faces)} faces")
+        print(f"[Face Recognition] First attempt (lenient): found {len(faces)} faces")
 
-        # If no faces found, try with even smaller min size (more lenient fallback)
+        # Strategy 2: If no faces, try with even smaller min size
         if len(faces) == 0:
-            min_size_fallback = (10, 10)  # Very small minimum
+            min_size_fallback = (max(10, int(min_size_scaled[0] * 0.5)), max(10, int(min_size_scaled[1] * 0.5)))
             print(f"[Face Recognition] Retrying with min_size={min_size_fallback}")
             faces = self.face_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.1,
-                minNeighbors=4,  # Slightly more lenient
-                minSize=min_size_fallback
+                scaleFactor=1.05,  # Smaller steps = more thorough
+                minNeighbors=2,  # Very lenient
+                minSize=min_size_fallback,
+                flags=cv2.CASCADE_SCALE_IMAGE
             )
             print(f"[Face Recognition] Fallback attempt: found {len(faces)} faces")
+        
+        # Strategy 3: Last resort - very small min size, very lenient
+        if len(faces) == 0:
+            print(f"[Face Recognition] Last resort: trying with min_size=(10, 10)")
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.05,
+                minNeighbors=1,  # Most lenient
+                minSize=(10, 10),
+                flags=cv2.CASCADE_SCALE_IMAGE
+            )
+            print(f"[Face Recognition] Last resort attempt: found {len(faces)} faces")
 
         if len(faces) == 0:
             print(f"[Face Recognition] No faces detected in {detection_image.shape[1]}x{detection_image.shape[0]} image")
