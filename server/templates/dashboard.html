@@ -148,11 +148,6 @@
             font-size: 13px;
         }
 
-        .connection-status.server {
-        }
-
-        .connection-status.rpi {
-        }
 
         .connection-dot {
             width: 8px;
@@ -972,6 +967,47 @@
             background: var(--border-hover);
         }
 
+        /* Camera Control Buttons - Muted colors for personality */
+        .camera-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .camera-btn.view-stream {
+            border-color: rgba(100, 150, 255, 0.3);
+            background: rgba(100, 150, 255, 0.1);
+            color: rgba(150, 180, 255, 0.9);
+        }
+
+        .camera-btn.view-stream:hover {
+            border-color: rgba(100, 150, 255, 0.5);
+            background: rgba(100, 150, 255, 0.15);
+        }
+
+        .camera-btn.register {
+            border-color: rgba(100, 255, 150, 0.3);
+            background: rgba(100, 255, 150, 0.1);
+            color: rgba(150, 255, 180, 0.9);
+        }
+
+        .camera-btn.register:hover {
+            border-color: rgba(100, 255, 150, 0.5);
+            background: rgba(100, 255, 150, 0.15);
+        }
+
+        .camera-btn.calibrate {
+            border-color: rgba(255, 200, 100, 0.3);
+            background: rgba(255, 200, 100, 0.1);
+            color: rgba(255, 220, 150, 0.9);
+        }
+
+        .camera-btn.calibrate:hover {
+            border-color: rgba(255, 200, 100, 0.5);
+            background: rgba(255, 200, 100, 0.15);
+        }
+
         button.danger {
             background: #ff3b30;
             color: #fff;
@@ -1620,11 +1656,20 @@
             <input type="file" id="vectorUploadInput" accept=".json" style="display: none;" onchange="uploadVectorDB(event)">
         </div>
 
+        <!-- Camera Settings Section (Always Visible) -->
+        <div class="camera-settings-section" style="margin-bottom: 24px;">
+            <div class="section-header" style="margin-bottom: 12px;">Camera Controls</div>
+            <div class="control-buttons">
+                <button class="camera-btn view-stream" onclick="viewCamera()">View Live Stream</button>
+                <button class="camera-btn register" onclick="registerViaRPi()">Register New Person</button>
+                <button class="camera-btn calibrate" onclick="calibrateRPi()">Calibrate Tripwires</button>
+            </div>
+        </div>
+
         <!-- Control Tabs -->
         <div class="control-tabs">
             <button class="tab-button active" onclick="switchTab('unlabeled')">Unlabeled</button>
             <button class="tab-button" onclick="switchTab('people')">All People</button>
-            <button class="tab-button" onclick="switchTab('settings')">Camera Settings</button>
         </div>
 
         <!-- Unlabeled Tab -->
@@ -1637,27 +1682,6 @@
         <div class="tab-panel" id="peopleTab">
             <div class="section-header">All registered people</div>
             <div class="people-grid" id="allPeopleGrid"></div>
-        </div>
-
-        <!-- Camera Settings Tab -->
-        <div class="tab-panel" id="settingsTab">
-            <div class="settings-section">
-                <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">Camera Controls</h3>
-                <div class="control-buttons">
-                    <button onclick="viewCamera()">
-                        <span style="font-size: 18px; margin-right: 6px;">📹</span>
-                        View Live Stream
-                    </button>
-                    <button onclick="registerViaRPi()">
-                        <span style="font-size: 18px; margin-right: 6px;">➕</span>
-                        Register New Person
-                    </button>
-                    <button class="secondary" onclick="calibrateRPi()">
-                        <span style="font-size: 18px; margin-right: 6px;">⚙️</span>
-                        Calibrate Tripwires
-                    </button>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -1916,7 +1940,7 @@
             if (tab === 'unlabeled') {
                 fetchUnlabeled();
             } else if (tab === 'people') {
-                fetchAllPeople();
+                filterPeople(); // Use filterPeople which will show data if available
             }
         }
 
@@ -2331,8 +2355,23 @@
                 
                 const grid = document.getElementById('unlabeledGrid');
                 
+                // Remove any skeleton cards immediately
+                const skeletons = grid.querySelectorAll('.skeleton-card');
+                skeletons.forEach(s => s.remove());
+                
+                // If no unlabeled people, show empty state immediately
+                if (unlabeled.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No unlabeled people</h3>
+                            <p>All registered people have names!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
                 // Smooth update - use data attributes to track person_id
-                const existingCards = Array.from(grid.children);
+                const existingCards = Array.from(grid.children).filter(card => !card.classList.contains('empty-state'));
                 const existingIds = new Set();
                 existingCards.forEach(card => {
                     const personId = card.getAttribute('data-person-id');
@@ -2351,6 +2390,10 @@
                     }
                 });
                 
+                // Remove empty state if we have data
+                const existingEmpty = grid.querySelector('.empty-state');
+                if (existingEmpty) existingEmpty.remove();
+                
                 // Add new unlabeled cards
                 unlabeled.forEach(person => {
                     const existingCard = grid.querySelector(`[data-person-id="${person.person_id}"]`);
@@ -2361,23 +2404,6 @@
                         grid.appendChild(newCard);
                     }
                 });
-                
-                // Handle empty state
-                if (unlabeled.length === 0) {
-                    const existingEmpty = grid.querySelector('.empty-state');
-                    if (!existingEmpty && grid.children.length === 0) {
-                        grid.innerHTML = `
-                            <div class="empty-state">
-                                <div class="emoji">✨</div>
-                                <h3>No unlabeled people</h3>
-                                <p>All registered people have names!</p>
-                            </div>
-                        `;
-                    }
-                } else {
-                    const existingEmpty = grid.querySelector('.empty-state');
-                    if (existingEmpty) existingEmpty.remove();
-                }
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.error('Fetch unlabeled error:', error);
@@ -2402,6 +2428,11 @@
                 }
                 
                 allPeopleData = await response.json();
+                
+                // Remove any skeleton cards immediately
+                const grid = document.getElementById('allPeopleGrid');
+                const skeletons = grid.querySelectorAll('.skeleton-card');
+                skeletons.forEach(s => s.remove());
                 
                 filterPeople();
                 
@@ -2441,8 +2472,23 @@
             
             const grid = document.getElementById('allPeopleGrid');
             
+            // Remove any skeleton cards immediately
+            const skeletons = grid.querySelectorAll('.skeleton-card');
+            skeletons.forEach(s => s.remove());
+            
+            // If no filtered results, show empty state immediately
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No people found</h3>
+                        <p>Try adjusting your search or filter</p>
+                    </div>
+                `;
+                return;
+            }
+            
             // Smooth update - use data attributes to track person_id
-            const existingCards = Array.from(grid.children);
+            const existingCards = Array.from(grid.children).filter(card => !card.classList.contains('empty-state'));
             const existingIds = new Set();
             existingCards.forEach(card => {
                 const personId = card.getAttribute('data-person-id');
@@ -2461,6 +2507,10 @@
                 }
             });
             
+            // Remove empty state if we have data
+            const existingEmpty = grid.querySelector('.empty-state');
+            if (existingEmpty) existingEmpty.remove();
+            
             // Add new cards or update existing ones
             filtered.forEach(person => {
                 const existingCard = grid.querySelector(`[data-person-id="${person.person_id}"]`);
@@ -2471,27 +2521,6 @@
                     grid.appendChild(newCard);
                 }
             });
-            
-            // Show empty state if needed
-            if (filtered.length === 0) {
-                // Remove any existing empty state
-                const existingEmpty = grid.querySelector('.empty-state');
-                if (existingEmpty) existingEmpty.remove();
-                
-                if (grid.children.length === 0) {
-                    grid.innerHTML = `
-                        <div class="empty-state">
-                            <div class="emoji">🔍</div>
-                            <h3>No people found</h3>
-                            <p>Try adjusting your search or filter</p>
-                        </div>
-                    `;
-                }
-            } else {
-                // Remove empty state if we have results
-                const existingEmpty = grid.querySelector('.empty-state');
-                if (existingEmpty) existingEmpty.remove();
-            }
         }
 
         // Create Person Card
@@ -2541,17 +2570,8 @@
                 indicator.style.display = 'inline-block';
             }
             
-            // Don't show loading skeletons on auto-refresh - only update data smoothly
-            // Only show skeletons on manual refresh or initial load
-            const isInitialLoad = !allPeopleData || allPeopleData.length === 0;
-            
-            if (isInitialLoad) {
-                if (currentTab === 'people') {
-                    showLoadingSkeletons('allPeopleGrid');
-                } else if (currentTab === 'unlabeled') {
-                    showLoadingSkeletons('unlabeledGrid');
-                }
-            }
+            // Don't show loading skeletons - just update data smoothly
+            // Empty states will show automatically if there's no data
             
             try {
                 // Use Promise.allSettled so one failure doesn't block others
