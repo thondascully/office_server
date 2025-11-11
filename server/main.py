@@ -28,6 +28,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Office Map Dashboard", lifespan=lifespan)
 
+# Health check endpoint for Railway
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway"""
+    return {"status": "ok", "service": "office-map-server"}
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
