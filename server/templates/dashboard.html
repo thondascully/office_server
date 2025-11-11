@@ -88,12 +88,53 @@
             justify-content: center;
             font-size: 18px;
             color: var(--text-primary);
-            width: 40px;
-            height: 40px;
+            width: auto;
+            height: auto;
+            min-width: 40px;
+            min-height: 36px;
         }
 
         .theme-toggle:hover {
             border-color: var(--border-hover);
+        }
+
+        /* System Toggle Button - Match connection status style with colors */
+        #systemToggleBtn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent-green);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--accent-green);
+            margin-left: 0;
+            height: auto;
+            min-height: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 0;
+            transition: all 0.2s ease;
+        }
+
+        #systemToggleBtn.enabled {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        #systemToggleBtn.disabled {
+            border-color: var(--accent-orange);
+            color: var(--accent-orange);
+            background: rgba(255, 136, 0, 0.1);
+        }
+
+        #systemToggleBtn:hover {
+            opacity: 0.8;
+            transform: none;
+        }
+
+        #systemToggleBtn:active {
+            transform: none;
         }
 
         .connection-status {
@@ -264,6 +305,312 @@
 
         @media (max-width: 1200px) {
             .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            /* Header - Stack vertically on mobile */
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .header h1 {
+                font-size: 18px;
+            }
+
+            .header-right {
+                width: 100%;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .connection-status {
+                font-size: 11px;
+                padding: 6px 12px;
+            }
+
+            #systemToggleBtn {
+                font-size: 11px;
+                padding: 6px 12px;
+                width: auto;
+            }
+
+            .theme-toggle {
+                padding: 6px 10px;
+                min-width: 36px;
+                min-height: 32px;
+                font-size: 16px;
+            }
+
+            /* Shorten connection text on mobile */
+            #rpiConnectionText::before {
+                content: '';
+            }
+            
+            #serverConnectionText::before {
+                content: '';
+            }
+
+            /* Stats Bar - Compact grid on mobile */
+            .stats-bar {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                align-items: stretch;
+            }
+
+            .stat-pill {
+                justify-content: space-between;
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+
+            .stat-pill .label {
+                font-size: 11px;
+            }
+
+            .stat-pill .value {
+                font-size: 14px;
+                font-weight: 700;
+            }
+
+            .auto-refresh-toggle {
+                grid-column: 1 / -1; /* Span full width */
+                margin-left: 0;
+                width: 100%;
+                justify-content: space-between;
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+
+            /* Dashboard Grid - Already single column */
+            .dashboard-grid {
+                gap: 16px;
+            }
+
+            .activity-feed {
+                max-height: 300px;
+                padding: 12px;
+            }
+
+            .activity-item {
+                padding: 10px;
+                font-size: 13px;
+            }
+
+            .activity-time {
+                font-size: 10px;
+            }
+
+            /* Sidebar Grid */
+            .sidebar-grid {
+                gap: 16px;
+            }
+
+            .whos-here {
+                padding: 12px;
+            }
+
+            .present-person {
+                padding: 8px;
+            }
+
+            .present-avatar {
+                width: 32px;
+                height: 32px;
+            }
+
+            /* People Grid - 1 column on mobile */
+            .people-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .person-card {
+                padding: 12px;
+            }
+
+            /* Search & Filter - Stack on mobile */
+            .search-filter {
+                flex-direction: column;
+            }
+
+            .search-box {
+                min-width: 100%;
+            }
+
+            .filter-select {
+                width: 100%;
+            }
+
+            /* Control Tabs - Scrollable on mobile */
+            .control-tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+
+            .control-tabs::-webkit-scrollbar {
+                display: none;
+            }
+
+            .tab-button {
+                white-space: nowrap;
+                font-size: 13px;
+                padding: 6px 12px;
+            }
+
+            /* Control Buttons - 2 columns on mobile */
+            .control-buttons {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            button {
+                padding: 12px 16px;
+                font-size: 13px;
+                min-height: 44px; /* Touch-friendly size */
+            }
+
+            /* Modals - Full screen on mobile */
+            .modal-content {
+                width: 100%;
+                max-width: 100%;
+                max-height: 100vh;
+                margin: 0;
+                border-radius: 0;
+                padding: 20px;
+                overflow-y: auto;
+            }
+
+            .modal-actions {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .modal-actions button {
+                width: 100%;
+            }
+
+            /* Person Detail Modal */
+            .person-detail {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .person-detail-image {
+                width: 100%;
+                max-width: 200px;
+                margin: 0 auto;
+            }
+
+            .person-detail-info {
+                width: 100%;
+            }
+
+            /* Summary Card */
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+
+            .summary-item {
+                padding: 12px;
+            }
+
+            /* Stream Container */
+            .stream-container {
+                max-height: 50vh;
+            }
+
+            /* Calibration Canvas */
+            #calibrationCanvas {
+                max-width: 100%;
+                height: auto;
+            }
+
+            .calibration-values {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .calibration-value {
+                width: 100%;
+            }
+
+            .calibration-value input {
+                width: 100%;
+            }
+        }
+
+        /* Very Small Screens (phones in portrait) */
+        @media (max-width: 480px) {
+            .container {
+                padding: 8px;
+            }
+
+            .header h1 {
+                font-size: 16px;
+            }
+
+            .connection-status {
+                padding: 4px 8px;
+            }
+
+            .connection-status span {
+                display: inline; /* Show text on slightly larger phones */
+            }
+
+            .stats-bar {
+                gap: 6px;
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stat-pill {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .stat-pill .label {
+                font-size: 10px;
+            }
+
+            .stat-pill .value {
+                font-size: 13px;
+            }
+
+            .auto-refresh-toggle {
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+
+            .activity-feed {
+                padding: 10px;
+                max-height: 250px;
+            }
+
+            .people-grid {
+                gap: 10px;
+            }
+
+            .person-card {
+                padding: 10px;
+            }
+
+            .modal-content {
+                padding: 16px;
+            }
+
+            .summary-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -1185,7 +1532,7 @@
                     <div class="connection-dot" id="serverConnectionDot"></div>
                     <span id="serverConnectionText">Server: Connected</span>
                 </div>
-                <button class="secondary" id="systemToggleBtn" onclick="toggleSystem()" style="margin-left: 8px;">Disable System</button>
+                <button id="systemToggleBtn" class="enabled" onclick="toggleSystem()">Disable System</button>
                 <div class="theme-toggle" onclick="toggleTheme()">
                     <span id="themeIcon">☀️</span>
                 </div>
@@ -1275,22 +1622,13 @@
 
         <!-- Control Tabs -->
         <div class="control-tabs">
-            <button class="tab-button active" onclick="switchTab('camera')">Camera</button>
-            <button class="tab-button" onclick="switchTab('unlabeled')">Unlabeled</button>
+            <button class="tab-button active" onclick="switchTab('unlabeled')">Unlabeled</button>
             <button class="tab-button" onclick="switchTab('people')">All People</button>
-        </div>
-
-        <!-- Camera Tab -->
-        <div class="tab-panel active" id="cameraTab">
-            <div class="control-buttons">
-                <button onclick="viewCamera()">View Live</button>
-                <button onclick="registerViaRPi()">Register Person</button>
-                <button class="secondary" onclick="calibrateRPi()">Calibrate Tripwires</button>
-            </div>
+            <button class="tab-button" onclick="switchTab('settings')">Camera Settings</button>
         </div>
 
         <!-- Unlabeled Tab -->
-        <div class="tab-panel" id="unlabeledTab">
+        <div class="tab-panel active" id="unlabeledTab">
             <div class="section-header">Click any card to label the person</div>
             <div class="people-grid" id="unlabeledGrid"></div>
         </div>
@@ -1299,6 +1637,27 @@
         <div class="tab-panel" id="peopleTab">
             <div class="section-header">All registered people</div>
             <div class="people-grid" id="allPeopleGrid"></div>
+        </div>
+
+        <!-- Camera Settings Tab -->
+        <div class="tab-panel" id="settingsTab">
+            <div class="settings-section">
+                <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">Camera Controls</h3>
+                <div class="control-buttons">
+                    <button onclick="viewCamera()">
+                        <span style="font-size: 18px; margin-right: 6px;">📹</span>
+                        View Live Stream
+                    </button>
+                    <button onclick="registerViaRPi()">
+                        <span style="font-size: 18px; margin-right: 6px;">➕</span>
+                        Register New Person
+                    </button>
+                    <button class="secondary" onclick="calibrateRPi()">
+                        <span style="font-size: 18px; margin-right: 6px;">⚙️</span>
+                        Calibrate Tripwires
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1443,7 +1802,7 @@
         let outerX = 800;
         let innerX = 1800;
         const RPI_ID = 'default';
-        let currentTab = 'camera';
+        let currentTab = 'unlabeled';
         let autoRefresh = true;
         let autoRefreshInterval = null;
         let allPeopleData = [];
@@ -1971,22 +2330,54 @@
                 const unlabeled = people.filter(p => !p.is_labeled);
                 
                 const grid = document.getElementById('unlabeledGrid');
-                grid.innerHTML = '';
                 
-                if (unlabeled.length === 0) {
-                    grid.innerHTML = `
-                        <div class="empty-state">
-                            <div class="emoji">✨</div>
-                            <h3>No unlabeled people</h3>
-                            <p>All registered people have names!</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                unlabeled.forEach(person => {
-                    grid.appendChild(createPersonCard(person, true));
+                // Smooth update - use data attributes to track person_id
+                const existingCards = Array.from(grid.children);
+                const existingIds = new Set();
+                existingCards.forEach(card => {
+                    const personId = card.getAttribute('data-person-id');
+                    if (personId) {
+                        existingIds.add(personId);
+                    }
                 });
+                
+                const unlabeledIds = new Set(unlabeled.map(p => p.person_id));
+                
+                // Remove cards that are no longer unlabeled
+                existingCards.forEach(card => {
+                    const personId = card.getAttribute('data-person-id');
+                    if (personId && !unlabeledIds.has(personId)) {
+                        card.remove();
+                    }
+                });
+                
+                // Add new unlabeled cards
+                unlabeled.forEach(person => {
+                    const existingCard = grid.querySelector(`[data-person-id="${person.person_id}"]`);
+                    
+                    if (!existingCard) {
+                        const newCard = createPersonCard(person, true);
+                        newCard.setAttribute('data-person-id', person.person_id);
+                        grid.appendChild(newCard);
+                    }
+                });
+                
+                // Handle empty state
+                if (unlabeled.length === 0) {
+                    const existingEmpty = grid.querySelector('.empty-state');
+                    if (!existingEmpty && grid.children.length === 0) {
+                        grid.innerHTML = `
+                            <div class="empty-state">
+                                <div class="emoji">✨</div>
+                                <h3>No unlabeled people</h3>
+                                <p>All registered people have names!</p>
+                            </div>
+                        `;
+                    }
+                } else {
+                    const existingEmpty = grid.querySelector('.empty-state');
+                    if (existingEmpty) existingEmpty.remove();
+                }
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     console.error('Fetch unlabeled error:', error);
@@ -2026,7 +2417,7 @@
             }
         }
 
-        // Filter People (Search + Filter)
+        // Filter People (Search + Filter) - Smooth update version
         function filterPeople() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             const filterType = document.getElementById('filterSelect').value;
@@ -2049,21 +2440,58 @@
             }
             
             const grid = document.getElementById('allPeopleGrid');
-            grid.innerHTML = '';
             
-            if (filtered.length === 0) {
-                grid.innerHTML = `
-                    <div class="empty-state">
-                        <h3>No results found</h3>
-                        <p>Try adjusting your search or filter</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            filtered.forEach(person => {
-                grid.appendChild(createPersonCard(person, !person.is_labeled));
+            // Smooth update - use data attributes to track person_id
+            const existingCards = Array.from(grid.children);
+            const existingIds = new Set();
+            existingCards.forEach(card => {
+                const personId = card.getAttribute('data-person-id');
+                if (personId) {
+                    existingIds.add(personId);
+                }
             });
+            
+            const filteredIds = new Set(filtered.map(p => p.person_id));
+            
+            // Remove cards that are no longer in filtered list
+            existingCards.forEach(card => {
+                const personId = card.getAttribute('data-person-id');
+                if (personId && !filteredIds.has(personId)) {
+                    card.remove();
+                }
+            });
+            
+            // Add new cards or update existing ones
+            filtered.forEach(person => {
+                const existingCard = grid.querySelector(`[data-person-id="${person.person_id}"]`);
+                
+                if (!existingCard) {
+                    const newCard = createPersonCard(person, !person.is_labeled);
+                    newCard.setAttribute('data-person-id', person.person_id);
+                    grid.appendChild(newCard);
+                }
+            });
+            
+            // Show empty state if needed
+            if (filtered.length === 0) {
+                // Remove any existing empty state
+                const existingEmpty = grid.querySelector('.empty-state');
+                if (existingEmpty) existingEmpty.remove();
+                
+                if (grid.children.length === 0) {
+                    grid.innerHTML = `
+                        <div class="empty-state">
+                            <div class="emoji">🔍</div>
+                            <h3>No people found</h3>
+                            <p>Try adjusting your search or filter</p>
+                        </div>
+                    `;
+                }
+            } else {
+                // Remove empty state if we have results
+                const existingEmpty = grid.querySelector('.empty-state');
+                if (existingEmpty) existingEmpty.remove();
+            }
         }
 
         // Create Person Card
@@ -2113,11 +2541,16 @@
                 indicator.style.display = 'inline-block';
             }
             
-            // Show loading states
-            if (currentTab === 'people') {
-                showLoadingSkeletons('allPeopleGrid');
-            } else if (currentTab === 'unlabeled') {
-                showLoadingSkeletons('unlabeledGrid');
+            // Don't show loading skeletons on auto-refresh - only update data smoothly
+            // Only show skeletons on manual refresh or initial load
+            const isInitialLoad = !allPeopleData || allPeopleData.length === 0;
+            
+            if (isInitialLoad) {
+                if (currentTab === 'people') {
+                    showLoadingSkeletons('allPeopleGrid');
+                } else if (currentTab === 'unlabeled') {
+                    showLoadingSkeletons('unlabeledGrid');
+                }
             }
             
             try {
@@ -2596,7 +3029,9 @@
                 const result = await response.json();
                 if (response.ok) {
                     btn.textContent = systemEnabled ? 'Disable System' : 'Enable System';
-                    btn.className = systemEnabled ? 'secondary' : 'danger';
+                    // Update button classes for color coding
+                    btn.classList.remove('enabled', 'disabled');
+                    btn.classList.add(systemEnabled ? 'enabled' : 'disabled');
                     showToast(result.message || (systemEnabled ? 'System enabled' : 'System disabled'), 'success');
                 } else {
                     systemEnabled = !systemEnabled; // Revert on error
