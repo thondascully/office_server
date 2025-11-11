@@ -44,15 +44,13 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 
-# Verify main.py exists (for debugging)
-RUN ls -la /app/ | head -20 && \
-    test -f /app/main.py && echo "main.py found" || echo "ERROR: main.py not found"
+# Verify main.py exists (for debugging during build)
+RUN test -f /app/main.py && echo "[Build] main.py found" || (echo "[Build] ERROR: main.py not found" && ls -la /app/ && exit 1)
 
 # Set PYTHONPATH environment variable
 ENV PYTHONPATH=/app
 
 # Run the server using uvicorn directly for better production performance
-# Use PORT environment variable if set, otherwise default to 8000
-# Add debugging to see what's in /app
-CMD ["sh", "-c", "echo '=== Debugging container contents ===' && ls -la /app/ && echo '=== Checking for main.py ===' && test -f /app/main.py && echo 'main.py exists' || echo 'main.py NOT FOUND' && echo '=== Python path ===' && python -c 'import sys; print(sys.path)' && echo '=== Starting server ===' && cd /app && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Railway sets PORT automatically, use it or default to 8000
+CMD ["sh", "-c", "cd /app && exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 
