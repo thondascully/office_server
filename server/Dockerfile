@@ -16,13 +16,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY server/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire server directory (context is already server/, so COPY . . copies server contents)
-COPY . .
+# Copy the entire server directory to /app
+COPY server/ .
 
 # Create necessary directories if they don't exist
 RUN mkdir -p data static/images static/exports models
