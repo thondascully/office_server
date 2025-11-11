@@ -967,6 +967,8 @@
 
         .mouse-position {
             position: absolute;
+            pointer-events: none;
+            z-index: 1000;
             background: rgba(0, 0, 0, 0.9);
             color: #0ff;
             padding: 4px 8px;
@@ -1587,8 +1589,18 @@
                 
                 if (data.rpis && data.rpis.length > 0) {
                     const rpi = data.rpis[0];
-                    const isStreaming = rpi.is_streaming;
-                    updateRPiConnectionStatus(true, isStreaming);
+                    // Check if RPi is actually active (last_seen within last 60 seconds)
+                    const lastSeen = new Date(rpi.last_seen).getTime();
+                    const now = Date.now();
+                    const secondsSinceLastSeen = (now - lastSeen) / 1000;
+                    const isActive = secondsSinceLastSeen < 60; // 60 second timeout
+                    
+                    if (isActive) {
+                        const isStreaming = rpi.is_streaming;
+                        updateRPiConnectionStatus(true, isStreaming);
+                    } else {
+                        updateRPiConnectionStatus(false);
+                    }
                 } else {
                     updateRPiConnectionStatus(false);
                 }
@@ -1679,35 +1691,45 @@
             people.forEach(person => {
                 const existing = activityHistory.find(a => a.person_id === person.person_id);
                 
+                // Use actual event timestamp (entered_at for entry, last_exit for exit, or last_seen as fallback)
+                let eventTimestamp;
+                if (person.state === 'in' && person.entered_at) {
+                    eventTimestamp = new Date(person.entered_at).getTime();
+                } else if (person.state === 'out' && person.last_exit) {
+                    eventTimestamp = new Date(person.last_exit).getTime();
+                } else {
+                    eventTimestamp = new Date(person.last_seen).getTime();
+                }
+                
                 if (!existing) {
                     activityHistory.unshift({
                         person_id: person.person_id,
                         name: person.name,
                         state: person.state,
                         last_seen: person.last_seen,
-                        timestamp: Date.now(),
+                        timestamp: eventTimestamp, // Use actual event time
                         action: person.state === 'in' ? 'enter' : 'leave',
                         is_labeled: person.is_labeled
                     });
                 } else if (existing.state !== person.state) {
-                    // State changed
-                    activityHistory.unshift({
-                        person_id: person.person_id,
-                        name: person.name,
-                        state: person.state,
-                        last_seen: person.last_seen,
-                        timestamp: Date.now(),
-                        action: person.state === 'in' ? 'enter' : 'leave',
-                        is_labeled: person.is_labeled
-                    });
+                    // State changed - update existing entry with new timestamp instead of creating new one
                     existing.state = person.state;
+                    existing.timestamp = eventTimestamp; // Update timestamp to actual event time
+                    existing.action = person.state === 'in' ? 'enter' : 'leave';
+                    existing.last_seen = person.last_seen;
+                    // Move to top of list
+                    activityHistory = activityHistory.filter(a => a.person_id !== person.person_id);
+                    activityHistory.unshift(existing);
+                } else {
+                    // State unchanged - just update last_seen, don't change timestamp
+                    existing.last_seen = person.last_seen;
                 }
             });
             
             activityHistory = activityHistory.slice(0, 20);
             
-            // Render activity feed
-            renderActivityList(); 
+            // Render activity feed with smooth updates
+            renderActivityListSmooth(); 
         }
 
         function renderActivityList() {
@@ -1756,6 +1778,104 @@
                 });
                 
                 activityList.appendChild(item);
+            });
+        }
+
+        // Smooth update version - updates in place without clearing
+        function renderActivityListSmooth() {
+            const activityList = document.getElementById('activityList');
+            
+            if (activityHistory.length === 0) {
+                activityList.innerHTML = '<div class="empty-state"><p>No recent activity</p></div>';
+                return;
+            }
+            
+            // Get existing items
+            const existingItems = Array.from(activityList.children);
+            const existingMap = new Map();
+            existingItems.forEach(item => {
+                const deleteBtn = item.querySelector('.activity-delete');
+                if (deleteBtn) {
+                    const timestamp = parseInt(deleteBtn.getAttribute('data-timestamp'));
+                    existingMap.set(timestamp, item);
+                }
+            });
+            
+            // Create a map of current activities
+            const currentMap = new Map();
+            activityHistory.forEach(activity => {
+                currentMap.set(activity.timestamp, activity);
+            });
+            
+            // Remove items that no longer exist
+            existingMap.forEach((item, timestamp) => {
+                if (!currentMap.has(timestamp)) {
+                    item.remove();
+                }
+            });
+            
+            // Update or create items
+            activityHistory.forEach((activity, index) => {
+                const existingItem = existingMap.get(activity.timestamp);
+                
+                if (existingItem) {
+                    // Update existing item in place
+                    const timeElement = existingItem.querySelector('.activity-time');
+                    if (timeElement) {
+                        timeElement.textContent = getTimeAgo(activity.timestamp);
+                    }
+                    // Update name if changed
+                    const nameElement = existingItem.querySelector('.activity-name');
+                    if (nameElement) {
+                        nameElement.textContent = activity.name || 'Unlabeled';
+                    }
+                    // Move to correct position if needed
+                    if (existingItem.nextSibling !== activityList.children[index]) {
+                        activityList.insertBefore(existingItem, activityList.children[index]);
+                    }
+                } else {
+                    // Create new item
+                    const item = document.createElement('div');
+                    item.className = 'activity-item';
+                    item.onclick = () => {
+                        const person = allPeopleData.find(p => p.person_id === activity.person_id);
+                        if (person) openPersonModal(person);
+                    };
+                    
+                    const timeAgo = getTimeAgo(activity.timestamp);
+                    const iconClass = activity.is_labeled ? activity.action : 'unlabeled';
+                    const actionText = activity.action === 'enter' ? 'entered' : 'left';
+                    
+                    item.innerHTML = `
+                        <div class="activity-icon ${iconClass}"></div>
+                        <div class="activity-text">
+                            <div class="activity-name ${activity.is_labeled ? '' : 'unlabeled'}">
+                                ${activity.name || 'Unlabeled'}
+                            </div>
+                            <div>${actionText}</div>
+                        </div>
+                        <div class="activity-time">${timeAgo}</div>
+
+                        ${!activity.is_labeled ? 
+                            `<span class="activity-action" onclick="event.stopPropagation(); openPersonModal(allPeopleData.find(p => p.person_id === '${activity.person_id}'))">Label</span>` 
+                            : ''}
+
+                        <span class="activity-delete" data-timestamp="${activity.timestamp}">×</span>
+                    `;
+                    
+                    const deleteBtn = item.querySelector('.activity-delete');
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteActivity(activity.timestamp, e);
+                    });
+                    
+                    // Insert at correct position
+                    if (index < activityList.children.length) {
+                        activityList.insertBefore(item, activityList.children[index]);
+                    } else {
+                        activityList.appendChild(item);
+                    }
+                }
             });
         }
 
@@ -1829,7 +1949,7 @@
             
             activityHistory = activityHistory.filter(item => item.timestamp !== timestamp);
             
-            renderActivityList();
+            renderActivityListSmooth();
         }
 
         // Fetch Unlabeled
@@ -2310,8 +2430,11 @@
             const mousePos = document.getElementById('mousePosition');
             mousePos.textContent = `X: ${x}px`;
             mousePos.style.display = 'block';
-            mousePos.style.left = (e.clientX + 15) + 'px';
-            mousePos.style.top = (e.clientY - 25) + 'px';
+            // Position relative to canvas container, not window
+            const container = calibrationCanvas.parentElement;
+            const containerRect = container.getBoundingClientRect();
+            mousePos.style.left = (e.clientX - containerRect.left + 15) + 'px';
+            mousePos.style.top = (e.clientY - containerRect.top - 25) + 'px';
         }
 
         function updateCalibrationFromInput() {
