@@ -1,478 +1,650 @@
-# Office Map API Server Setup Guide
+# Office Map System - Complete Documentation
 
-## 🏗️ Architecture Overview
+## System Overview
 
-**You are here: The "Brain" (Server)**
+The Office Map System is a distributed face recognition and presence tracking system consisting of:
+- **Raspberry Pi 5 (Edge Device)**: Motion detection, person detection, and image capture
+- **Central Server**: Face recognition, state management, and data storage
+- **Web Dashboard**: Real-time monitoring and management interface
+
+## Architecture
 
 ```
-[RPi5 Camera] --detects person with YOLO--> [RPi5 tracks & buffers images]
-                                                        |
-                                                        | HTTP POST
-                                                        v
-                                            [MacBook Server (YOU)]
-                                            - Runs ArcFace (heavy AI)
-                                            - Face recognition
-                                            - State management
-                                                        |
-                                                        v
-                                            [Web Browser polls /state]
-                                            - Displays office map
+┌─────────────────────────────────────────────────────────────────┐
+│                    Raspberry Pi 5 (Edge Device)                  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Motion Detection Loop (Every 1 second)                  │  │
+│  │  - MAE Randomized Algorithm                               │  │
+│  │  - Detects frame-to-frame motion changes                  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           │ Motion Detected                      │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Tripwire Filter                                         │  │
+│  │  - Check if motion is within tripwire boundaries         │  │
+│  │  - Outer X: Entrance boundary (default: 800px)          │  │
+│  │  - Inner X: Office boundary (default: 1800px)            │  │
+│  │  - Only process if motion within these bounds            │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           │ Within Tripwires                     │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  YOLO Person Detection                                   │  │
+│  │  - Runs YOLO model to detect if motion is a person       │  │
+│  │  - Filters out false positives (pets, objects, etc.)     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           │ Person Detected                      │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Image Capture & Buffering                               │  │
+│  │  - Captures 10 images in burst                           │  │
+│  │  - Buffers images for transmission                       │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           │ HTTP POST /api/event                 │
+│                           ▼                                      │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Central Server (FastAPI)                      │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Event Handler (/api/event)                              │  │
+│  │  - Receives 10 images from RPi                          │  │
+│  │  - Processes up to 5 images (optimized for speed)       │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Face Detection (Haar Cascade)                           │  │
+│  │  - Detects faces in images                                │  │
+│  │  - Multi-strategy fallback for reliability                │  │
+│  │  - Resizes images to 1600px max width for speed           │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           │ Face Detected                        │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Face Recognition (ArcFace)                              │  │
+│  │  - Generates 512-dimensional embedding                   │  │
+│  │  - Computes mean embedding from multiple images           │  │
+│  │  - Early stopping after 3-4 good embeddings              │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Vector Database Search                                   │  │
+│  │  - Cosine similarity matching                            │  │
+│  │  - Threshold: 0.5 (configurable)                         │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│              ┌────────────┴────────────┐                        │
+│              │                         │                         │
+│         Match Found              No Match                         │
+│              │                         │                         │
+│              ▼                         ▼                         │
+│  ┌──────────────────┐    ┌──────────────────────────────┐        │
+│  │  Update State    │    │  Auto-Register Unknown      │        │
+│  │  - Set in/out    │    │  - Create new person_id     │        │
+│  │  - Update times  │    │  - Store embedding          │        │
+│  │                  │    │  - Save sample image         │        │
+│  └──────────────────┘    └──────────────────────────────┘        │
+│              │                         │                         │
+│              └────────────┬────────────┘                         │
+│                           │                                      │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Metadata Database                                        │  │
+│  │  - Store person information                               │  │
+│  │  - Track state changes                                    │  │
+│  │  - Save to metadata.json                                 │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                      │
+│                           │                                      │
+│                           ▼                                      │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                           │ HTTP GET /api/dashboard/*
+                           │ (Polled every 10 seconds)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Web Dashboard (Browser)                      │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Auto-Refresh Loop                                        │  │
+│  │  - Fetches stats, people, RPi status                     │  │
+│  │  - Updates UI smoothly without flickering                │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Display Components                                       │  │
+│  │  - Currently in office                                    │  │
+│  │  - Recent activity feed                                   │  │
+│  │  - People database                                        │  │
+│  │  - Unlabeled people                                       │  │
+│  │  - RPi connection status                                  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 📋 Prerequisites
+## Component Workflow
+
+### Raspberry Pi 5 Edge Device
+
+#### Motion Detection (MAE Randomized Algorithm)
+- **Frequency**: Checks every 1 second
+- **Method**: MAE (Mean Absolute Error) randomized algorithm compares consecutive frames
+- **Purpose**: Efficiently detects any motion in the camera view
+- **Optimization**: Only triggers expensive operations when motion is detected
+
+#### Tripwire Filtering
+- **Purpose**: Reduces false positives and saves computation
+- **Configuration**:
+  - `outer_x`: Entrance boundary (default: 800px from left)
+  - `inner_x`: Office boundary (default: 1800px from left)
+- **Logic**: Only processes detections if motion/person is within these X-axis boundaries
+- **Benefits**:
+  - Prevents processing people walking by outside the office
+  - Reduces unnecessary YOLO runs
+  - Saves computational resources on RPi
+
+#### Person Detection (YOLO)
+- **Trigger**: Only runs when motion is detected AND within tripwires
+- **Model**: YOLO object detection model
+- **Purpose**: Confirms that detected motion is actually a person
+- **Filtering**: Eliminates false positives (pets, moving objects, shadows)
+- **Output**: Person bounding box coordinates
+
+#### Image Capture
+- **Burst Size**: 10 images captured when person detected
+- **Timing**: Images captured with small delays between frames
+- **Format**: JPEG images ready for transmission
+- **Transmission**: Sent via HTTP POST to server
+
+#### Communication with Server
+- **Heartbeat**: Periodic status updates to `/api/rpi/heartbeat`
+- **Command Polling**: Checks `/api/rpi/commands/{rpi_id}` for dashboard commands
+- **Stream Frames**: Sends live camera feed to `/api/rpi/stream/{rpi_id}`
+- **Event Submission**: POSTs detection events to `/api/event`
+
+### Central Server
+
+#### Face Recognition Pipeline
+
+**1. Image Reception**
+- Receives up to 10 images from RPi
+- Processes first 5 images (optimized for speed)
+- Handles image decoding errors gracefully
+
+**2. Face Detection (Haar Cascade)**
+- Uses OpenCV Haar Cascade classifier
+- Multi-strategy fallback:
+  - Strategy 1: Lenient parameters (fast, catches most faces)
+  - Strategy 2: Smaller minimum size if no faces found
+  - Strategy 3: Very lenient last resort
+- Image preprocessing: Resizes to max 1600px width before detection
+- Output: Face bounding box coordinates
+
+**3. Face Embedding (ArcFace)**
+- Model: `arcfaceresnet100-8.onnx` (ONNX Runtime)
+- Input: 112x112 cropped and aligned face images
+- Output: 512-dimensional embedding vector
+- Optimization: Early stopping after 3-4 good embeddings
+- Mean embedding: Averages multiple face embeddings for robustness
+
+**4. Vector Database Search**
+- Method: Cosine similarity matching
+- Threshold: 0.5 (configurable in `config.py`)
+- Process:
+  1. Normalize query embedding
+  2. Compare against all stored embeddings
+  3. Return best match if similarity >= threshold
+  4. Return None if no match found
+
+**5. State Management**
+- **Known Person**:
+  - Updates existing person's state (in/out)
+  - Records entry/exit timestamps
+  - Tracks visit count
+  - Stores recognition confidence
+- **Unknown Person**:
+  - Auto-registers with generated ID (e.g., `unknown_012`)
+  - Creates metadata entry
+  - Stores face embedding
+  - Saves sample image
+  - Can be labeled later via dashboard
+
+#### Data Storage
+
+**Vector Database** (`vectors.json`)
+- Stores 512-dimensional face embeddings
+- Key: `person_id`
+- Value: List of floats (embedding vector)
+- Format: JSON file
+
+**Metadata Database** (`metadata.json`)
+- Stores person information:
+  - `person_id`: Unique identifier
+  - `name`: Display name (optional)
+  - `state`: "in" or "out"
+  - `created_at`: First registration timestamp
+  - `last_seen`: Most recent detection timestamp
+  - `entered_at`: When person entered (if currently in)
+  - `last_exit`: When person last left (if currently out)
+  - `visit_count`: Number of times person has entered
+  - `last_similarity`: Recognition confidence score
+  - `image_paths`: List of stored image file paths
+
+### Web Dashboard
+
+#### Real-Time Updates
+- **Auto-refresh**: Polls server every 10 seconds
+- **Endpoints**:
+  - `/api/dashboard/stats`: Statistics (total people, present, unlabeled)
+  - `/api/dashboard/people`: All people with metadata
+  - `/api/rpi/status`: RPi connection status
+- **Smooth Updates**: Uses data attributes to update DOM without flickering
+
+#### Features
+- **Currently In Office**: Shows people currently present
+- **Recent Activity**: Timeline of entry/exit events
+- **People Database**: Browse and manage all registered people
+- **Unlabeled People**: View and label unknown persons
+- **RPi Management**: View live stream, register people, calibrate tripwires
+- **Database Management**: Backup/restore full state or vectors only
+
+## System Flow Example
+
+### Scenario: Person Enters Office
+
+1. **RPi Motion Detection** (Every 1s)
+   - MAE algorithm detects motion in frame
+   - Motion detected at X=1200px (within tripwires 800-1800)
+
+2. **Tripwire Check**
+   - X=1200px is between outer_x (800) and inner_x (1800)
+   - Motion is within valid zone
+   - Proceed to person detection
+
+3. **YOLO Person Detection**
+   - YOLO model processes frame
+   - Person detected with confidence > threshold
+   - Person bounding box confirmed
+
+4. **Image Capture**
+   - RPi captures 10 images in burst
+   - Images buffered for transmission
+
+5. **Event Transmission**
+   - RPi sends POST to `/api/event`
+   - Includes: direction="enter", 10 images, timestamp
+
+6. **Server Processing**
+   - Receives 10 images, processes first 5
+   - Face detection finds face in 4/5 images
+   - ArcFace generates embeddings from 4 faces
+   - Mean embedding computed
+
+7. **Vector Search**
+   - Compares mean embedding against database
+   - Best match: "alice_smith" with similarity 0.87
+   - Similarity > threshold (0.5), match confirmed
+
+8. **State Update**
+   - Updates alice_smith state: "out" -> "in"
+   - Records entered_at timestamp
+   - Increments visit_count
+   - Stores last_similarity (0.87)
+   - Saves to metadata.json
+
+9. **Dashboard Update**
+   - Dashboard polls `/api/dashboard/people`
+   - Receives updated state for alice_smith
+   - UI updates "Currently In Office" section
+   - Activity feed shows "Alice Smith entered"
+
+### Scenario: Unknown Person Enters
+
+1-5. Same as above (motion detection through image capture)
+
+6. **Server Processing**
+   - Face detection and embedding generation (same as above)
+
+7. **Vector Search**
+   - Compares embedding against database
+   - Best match: similarity 0.35 (below threshold 0.5)
+   - No match found
+
+8. **Auto-Registration**
+   - Creates new person_id: "unknown_012"
+   - Stores face embedding in vector database
+   - Creates metadata entry (name=None, state="in")
+   - Saves sample image to disk
+   - Returns status: "unknown_registered"
+
+9. **Dashboard Update**
+   - Dashboard shows "unknown_012" in unlabeled section
+   - Admin can click to label the person
+   - Once labeled, person appears in main database
+
+## Configuration
+
+### Server Configuration (`server/config.py`)
+
+```python
+# Face Recognition
+SIMILARITY_THRESHOLD = 0.5  # Matching threshold
+MIN_FACE_SIZE = (30, 30)    # Minimum face size in pixels
+DETECTION_MAX_WIDTH = 1600  # Max image width for detection (speed optimization)
+
+# Image Storage
+MAX_IMAGES_PER_PERSON = 20  # Maximum stored images per person
+THUMBNAIL_SIZE = (150, 150) # Thumbnail dimensions
+```
+
+### RPi Configuration (`server/data/rpi_configs/default.yaml`)
+
+```yaml
+burst_size: 10              # Number of images to capture
+detection_interval: 1.0      # Motion detection interval (seconds)
+tripwires:
+  inner_x: 1800              # Inner boundary (office)
+  outer_x: 800               # Outer boundary (entrance)
+```
+
+## API Endpoints
+
+### Face Recognition
+
+**POST /api/register**
+- Register a new person with face images
+- Parameters: `name` (optional), `rpi_id`, `images` (files)
+- Returns: Registration status and person_id
+
+**POST /api/event**
+- Handle entry/exit event from RPi
+- Parameters: `direction` ("enter"/"leave"), `rpi_id`, `timestamp`, `images` (files)
+- Returns: Recognition result, person_id, similarity score, state change
+
+### Dashboard
+
+**GET /**
+- Main dashboard page (HTML)
+
+**GET /api/dashboard/stats**
+- Get dashboard statistics
+- Returns: Total people, present count, unlabeled count, vector count, connected RPis
+
+**GET /api/dashboard/people**
+- Get all registered people with metadata
+- Returns: Array of person objects with full details
+
+**POST /api/dashboard/label**
+- Label an unlabeled person
+- Body: `person_id`, `name`
+- Returns: Success status
+
+**DELETE /api/dashboard/person/{person_id}**
+- Delete a person from the system
+- Returns: Success status
+
+### RPi Communication
+
+**POST /api/rpi/heartbeat**
+- RPi sends periodic heartbeat
+- Body: `rpi_id`, `status`, `uptime`
+- Returns: Server time
+
+**GET /api/rpi/commands/{rpi_id}**
+- RPi polls for commands from dashboard
+- Returns: Command and parameters (if any)
+
+**GET /api/rpi/config/{rpi_id}**
+- Get RPi configuration
+- Returns: Configuration object including tripwires
+
+**POST /api/rpi/config/{rpi_id}**
+- Update RPi configuration
+- Body: Configuration object
+- Returns: Success status
+
+**POST /api/rpi/stream/{rpi_id}**
+- Receive stream frame from RPi
+- Body: JPEG image bytes
+- Returns: Status
+
+**GET /api/rpi/stream/{rpi_id}**
+- Get latest stream frame for dashboard
+- Returns: JPEG image
+
+**GET /api/rpi/status**
+- Get status of all connected RPis
+- Returns: Array of RPi status objects
+
+### RPi Control
+
+**POST /api/rpi/system-toggle**
+- Enable/disable RPi system
+- Body: `rpi_id`, `enabled`
+- Returns: Success status
+
+**POST /api/rpi/start-stream**
+- Command RPi to start streaming
+- Body: `rpi_id`
+- Returns: Success status
+
+**POST /api/rpi/stop-stream**
+- Command RPi to stop streaming
+- Body: `rpi_id`
+- Returns: Success status
+
+**POST /api/rpi/calibrate**
+- Command RPi to enter calibration mode
+- Body: `rpi_id`
+- Returns: Success status
+
+**POST /api/rpi/stop-calibrate**
+- Command RPi to exit calibration mode
+- Body: `rpi_id`
+- Returns: Success status
+
+### Database Management
+
+**GET /api/export/vectors**
+- Export vector database only
+- Returns: JSON file download
+
+**POST /api/import/vectors**
+- Import vector database
+- Body: JSON file
+- Returns: Import status and count
+
+**GET /api/export/full-state**
+- Export complete system state (vectors + metadata)
+- Returns: JSON file download
+
+**POST /api/import/full-state**
+- Import complete system state
+- Body: JSON file
+- Returns: Import status and counts
+
+## Installation & Setup
+
+### Prerequisites
 
 - Python 3.8+
+- Raspberry Pi 5 with camera module
 - Downloaded models:
   - `arcfaceresnet100-8.onnx` (~264 MB)
   - `haarcascade_frontalface_default.xml`
 
-## 🚀 Quick Start
+### Server Setup
 
-### 1. Install Dependencies
-
+1. **Install Dependencies**
 ```bash
+cd server
 pip install -r requirements.txt
 ```
 
-### 2. Set Up Directory Structure
-
-Your project should look like this:
-
-```
-office_map_project/
-├── api_server.py
-├── office_map.html
-├── requirements.txt
-├── models/
-│   ├── arcfaceresnet100-8.onnx
-│   └── haarcascade_frontalface_default.xml
-└── static/
-    └── profile_pics/
-        └── (your avatar images, e.g., alice_smith.png)
-```
-
-### 3. Download Models
-
-**ArcFace Model:**
+2. **Download Models**
 ```bash
-# Download from ONNX Model Zoo
-wget https://github.com/onnx/models/raw/main/validated/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx -P models/
+# Use the download script from project root
+./scripts/download_models.sh
+
+# Or manually download to server/models/:
+# ArcFace model
+wget https://github.com/onnx/models/raw/main/validated/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx -P server/models/
+
+# Haar Cascade
+wget https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml -P server/models/
 ```
 
-**Haar Cascade (OpenCV):**
+3. **Run Server**
 ```bash
-# Download from OpenCV GitHub
-wget https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml -P models/
+# From server directory
+python main.py
+
+# Or use the startup script from project root
+./scripts/start_server.sh
 ```
 
-### 4. Run the Server
+Server will start on `http://0.0.0.0:8000`
 
-```bash
-uvicorn api_server:app --host 0.0.0.0 --port 8000 --reload
-```
+### RPi Setup
 
-You should see:
-```
-🧠 Loading ArcFace model...
-✅ ArcFace model loaded
-🧠 Loading Haar Cascade...
-✅ Haar Cascade loaded
-🚀 Server ready!
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
+1. **Configure Server URL**
+   - Update RPi code to point to server IP
+   - Example: `http://192.168.1.100:8000`
 
-### 5. Test the Server
+2. **Calibrate Tripwires**
+   - Use dashboard "Calibrate Tripwires" feature
+   - Drag lines to set outer and inner boundaries
+   - Save configuration
 
-Open your browser and go to: `http://localhost:8000`
+3. **Start RPi Detection**
+   - RPi begins motion detection loop
+   - Sends heartbeat every few seconds
+   - Processes detections and sends events
 
-You should see your office map HTML page.
+## Deployment
 
-## 🧪 Testing Without RPi5
+### Railway Deployment
 
-You can test the server independently using `curl` or Python scripts before connecting your RPi5.
+The project includes Railway configuration:
 
-### Test 1: Register a Member (Simulated)
+- **railway.json**: Deployment configuration
+- **Dockerfile**: Container build instructions
+- **Health Check**: `/health` endpoint for Railway monitoring
 
-Create a simple test script to register yourself:
+Deploy by connecting Railway to your GitHub repository.
 
-```python
-# test_register.py
-import requests
-import cv2
-
-# Capture 10 frames from your webcam
-cap = cv2.VideoCapture(0)
-images = []
-
-print("Look at the camera...")
-for i in range(10):
-    ret, frame = cap.read()
-    if ret:
-        _, buffer = cv2.imencode('.jpg', frame)
-        images.append(('images', ('frame.jpg', buffer.tobytes(), 'image/jpeg')))
-    
-cap.release()
-
-# Send to server
-response = requests.post(
-    'http://localhost:8000/register',
-    data={'member_id': 'test_user'},
-    files=images
-)
-
-print(response.json())
-```
-
-Run it:
-```bash
-python test_register.py
-```
-
-Expected output:
-```json
-{
-  "status": "success",
-  "member_id": "test_user",
-  "message": "Registered test_user with 10 images",
-  "total_members": 1
-}
-```
-
-### Test 2: Check State Endpoint
+### Local Docker Testing
 
 ```bash
-curl http://localhost:8000/state
+# Build and test locally
+./scripts/test_docker_local.sh
 ```
 
-Expected output:
-```json
-{
-  "state": {
-    "test_user": "out"
-  },
-  "total_members": 1,
-  "members_present": 0
-}
-```
-
-### Test 3: Debug Members
-
-```bash
-curl http://localhost:8000/debug/members
-```
-
-## 🔌 Connecting Your RPi5
-
-Once your server is running, update your RPi5's `edge_tracker.py`:
-
-```python
-# In edge_tracker.py on your RPi5
-BACKEND_API_URL = "http://192.168.1.100:8000"  # Replace with your MacBook's IP
-```
-
-**Find your MacBook's IP:**
-```bash
-# On macOS
-ifconfig | grep "inet " | grep -v 127.0.0.1
-
-# Or use:
-ipconfig getifaddr en0  # For WiFi
-```
-
-## 📊 API Endpoints Reference
-
-### `POST /register`
-Register a new member with face images.
-
-**Form Data:**
-- `member_id` (string): Unique identifier (e.g., "alice_smith")
-- `images` (files): 10 JPEG images
-
-**Response:**
-```json
-{
-  "status": "success",
-  "member_id": "alice_smith",
-  "message": "Registered alice_smith with 10 images",
-  "total_members": 5
-}
-```
-
-### `POST /event`
-Handle entry/exit event.
-
-**Form Data:**
-- `direction` (string): "enter" or "leave"
-- `images` (files): 10 JPEG images
-
-**Response (Success):**
-```json
-{
-  "status": "success",
-  "member_id": "alice_smith",
-  "similarity": 0.847,
-  "direction": "enter",
-  "new_state": "in",
-  "old_state": "out"
-}
-```
-
-**Response (No Match):**
-```json
-{
-  "status": "no_match",
-  "message": "Person not recognized",
-  "direction": "enter"
-}
-```
-
-### `GET /state`
-Get current room occupancy (polled by frontend).
-
-**Response:**
-```json
-{
-  "state": {
-    "alice_smith": "in",
-    "bob_jones": "out",
-    "charlie_kim": "in"
-  },
-  "total_members": 3,
-  "members_present": 2
-}
-```
-
-### `GET /debug/members`
-Debug endpoint to see all registered members.
-
-**Response:**
-```json
-{
-  "registered_members": ["alice_smith", "bob_jones", "charlie_kim"],
-  "state": {
-    "alice_smith": "in",
-    "bob_jones": "out",
-    "charlie_kim": "in"
-  }
-}
-```
-
-## 🔧 Configuration & Tuning
-
-### Face Recognition Threshold
-
-In `api_server.py`, adjust this value:
-
-```python
-SIMILARITY_THRESHOLD = 0.5  # Default: 0.5
-```
-
-- **Too many false positives?** Increase to `0.6` or `0.7`
-- **Not recognizing people?** Decrease to `0.4` or `0.45`
-- Typical range: `0.3` to `0.7`
-
-### Minimum Face Size
-
-```python
-MIN_FACE_SIZE = (30, 30)  # Default: 30x30 pixels
-```
-
-Increase if detecting too many false faces in the background.
-
-## 🐛 Troubleshooting
-
-### Problem: "ArcFace model not found"
-
-**Solution:** Ensure `arcfaceresnet100-8.onnx` is in the `models/` directory.
-
-```bash
-ls -lh models/
-# Should show arcfaceresnet100-8.onnx (~264 MB)
-```
-
-### Problem: "No face detected in any images"
-
-**Causes:**
-- Face is too small in the frame
-- Poor lighting
-- Face is at extreme angle
-- Images are blurry
-
-**Solutions:**
-1. Have person stand closer to camera
-2. Improve lighting
-3. Increase buffer size from 10 to 20 images
-4. Lower `MIN_FACE_SIZE` threshold
-
-### Problem: "Person not recognized"
-
-**Causes:**
-- Similarity score below threshold
-- Person not registered
-- Very different lighting/angle from registration
-
-**Debug Steps:**
-
-1. Check if person is registered:
-   ```bash
-   curl http://localhost:8000/debug/members
-   ```
-
-2. Check similarity scores in server logs:
-   ```
-   🔍 Searching for match in database...
-     • alice_smith: similarity = 0.823
-     • bob_jones: similarity = 0.234
-   ✅ Match found: alice_smith (similarity: 0.823)
-   ```
-
-3. If similarity is close to threshold (e.g., 0.48 when threshold is 0.5):
-   - Lower `SIMILARITY_THRESHOLD`
-   - Re-register with better quality images
-
-### Problem: Server crashes on ARM Mac (M1/M2/M3)
-
-**Cause:** ONNX Runtime may need ARM-specific configuration.
-
-**Solution:**
-```bash
-pip uninstall onnxruntime
-pip install onnxruntime  # This should auto-detect ARM
-```
-
-Or try:
-```bash
-pip install onnxruntime-silicon  # For Apple Silicon
-```
-
-## 📈 Performance Tips
-
-### Current Performance (M-series Mac)
-- Model loading: ~2-3 seconds
-- Single image processing: ~50-100ms
-- 10-image batch: ~500ms-1s
-
-### Optimization Ideas
-
-1. **GPU Acceleration** (if you have CUDA-capable GPU):
-   ```python
-   arcface_session = ort.InferenceSession(
-       str(ARCFACE_MODEL_PATH),
-       providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
-   )
-   ```
-
-2. **Reduce Image Size** on RPi5:
-   - Current: sending full-resolution crops
-   - Optimization: resize to 640x480 before sending
-
-3. **Async Processing**:
-   - Current: blocking requests
-   - Future: process images in background thread
-
-## 🚢 Next Steps: Moving to Production
-
-### 1. Replace FAKE_VECTOR_DB
-
-**Option A: Vector Database**
-- Pinecone (easiest, cloud-hosted)
-- Weaviate (self-hosted)
-- pgvector (PostgreSQL extension)
-
-**Option B: Simple Persistence**
-```python
-import pickle
-
-# Save on shutdown
-with open('vector_db.pkl', 'wb') as f:
-    pickle.dump(FAKE_VECTOR_DB, f)
-
-# Load on startup
-with open('vector_db.pkl', 'rb') as f:
-    FAKE_VECTOR_DB = pickle.load(f)
-```
-
-### 2. Replace FAKE_STATE_DB with Real-Time DB
-
-**Firebase Firestore** (Recommended):
-```python
-import firebase_admin
-from firebase_admin import firestore
-
-db = firestore.client()
-
-# Update state
-db.collection('office_state').document(member_id).set({
-    'state': 'in',
-    'timestamp': firestore.SERVER_TIMESTAMP
-})
-```
-
-Frontend subscribes to changes via WebSocket (no polling needed).
-
-### 3. Deploy Server
-
-**Option A: Fly.io** (Simple)
-```bash
-flyctl launch
-flyctl deploy
-```
-
-**Option B: Railway**
-- Push to GitHub
-- Connect Railway to repo
-- Auto-deploys on push
-
-**Option C: Docker + Any Cloud**
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### 4. Add Authentication
-
-```python
-from fastapi import Depends, HTTPException, Header
-
-async def verify_api_key(x_api_key: str = Header(...)):
-    if x_api_key != "your-secret-key":
-        raise HTTPException(status_code=403, detail="Invalid API key")
-    return x_api_key
-
-@app.post("/event", dependencies=[Depends(verify_api_key)])
-async def handle_event(...):
-    ...
-```
-
-## 📚 Additional Resources
-
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [ONNX Runtime Documentation](https://onnxruntime.ai/docs/)
-- [ArcFace Paper](https://arxiv.org/abs/1801.07698)
-- [OpenCV Face Detection](https://docs.opencv.org/4.x/db/d28/tutorial_cascade_classifier.html)
-
-## 🆘 Need Help?
-
-Check the server logs for detailed error messages:
-```bash
-# Server logs show:
-# - Which images had faces detected
-# - Similarity scores for each member
-# - State changes
-```
-
-Example log output:
-```
-📝 Registration request for: alice_smith
-   Received 10 images
-  ✓ Image 1: Face detected and processed
-  ✓ Image 2: Face detected and processed
-  ...
-✅ Generated mean embedding from 10/10 images
-✅ Successfully registered alice_smith
-   Total registered members: 1
-```
+## Troubleshooting
+
+### Server Issues
+
+**Problem: "ArcFace model not found"**
+- Ensure `arcfaceresnet100-8.onnx` is in `server/models/`
+- Check file permissions
+
+**Problem: "No faces detected in any images"**
+- Check lighting conditions
+- Verify person is facing camera
+- Adjust `MIN_FACE_SIZE` if faces are too small
+- Check `DETECTION_MAX_WIDTH` setting
+
+**Problem: Person not recognized**
+- Check similarity threshold in `config.py`
+- Verify person is registered
+- Re-register with better quality images
+- Check server logs for similarity scores
+
+### RPi Connection Issues
+
+**Problem: RPi not connecting**
+- Verify server URL in RPi configuration
+- Check network connectivity
+- Verify server is accessible from RPi network
+- Check firewall settings
+
+**Problem: Events timing out**
+- Increase server timeout settings
+- Reduce number of images sent (currently 10)
+- Check network latency
+- Verify server processing speed
+
+### Dashboard Issues
+
+**Problem: Dashboard not loading**
+- Check browser console for errors
+- Verify API endpoints are accessible
+- Check CORS settings
+- Verify password is correct (ends with "000")
+
+## Performance Optimizations
+
+### Server-Side
+
+- **Image Processing**: Limited to 5 images per event (configurable)
+- **Face Detection**: Image resizing to 1600px max width before detection
+- **Early Stopping**: Stops after 3-4 good embeddings for speed
+- **Multi-strategy Detection**: Fallback strategies for reliability
+
+### RPi-Side
+
+- **Motion Detection**: MAE algorithm is lightweight (runs every 1s)
+- **Tripwire Filtering**: Prevents unnecessary YOLO runs
+- **Burst Capture**: 10 images captured efficiently
+- **Image Compression**: JPEG format for transmission
+
+## Data Management
+
+### Backup & Restore
+
+**Full State Backup**
+- Exports both vectors and metadata
+- Use "Download Full State" in dashboard
+- Restore with "Upload Full State"
+- Useful for deployment migrations
+
+**Vector Database Only**
+- Exports only face embeddings
+- Use "Download Vector DB" in dashboard
+- Restore with "Upload Vector DB"
+- Useful for sharing recognition data
+
+### Data Files
+
+- `server/data/vectors.json`: Face embeddings database
+- `server/data/metadata.json`: Person metadata database
+- `server/data/rpi_configs/default.yaml`: RPi configuration
+- `server/static/images/`: Stored person images
+
+## Security Considerations
+
+- Dashboard is password protected (password must end with "000")
+- All timestamps stored in UTC
+- Images stored locally on server
+- No external data sharing by default
+- CORS enabled for development (restrict in production)
+
+## Future Enhancements
+
+- WebSocket support for real-time updates (replacing polling)
+- Multiple RPi device support with location tracking
+- Advanced analytics and reporting
+- Mobile app for member self-service
+- Privacy controls and opt-in/opt-out features
+- Automated data retention policies

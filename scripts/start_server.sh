@@ -75,8 +75,8 @@ echo "  Starting server on port $PORT"
 echo "=========================================="
 echo ""
 
-# Change to script directory
-cd "$SCRIPT_DIR"
+# Change to server directory (parent of scripts/)
+cd "$SCRIPT_DIR/../server"
 
 # Start the server
 if [ -n "$PORT" ] && [ "$PORT" != "8000" ]; then

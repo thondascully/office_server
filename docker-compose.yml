@@ -2,14 +2,14 @@ services:
   office-map-server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: server/Dockerfile
     container_name: office-map-server
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
-      - ./static:/app/static
-      - ./models:/app/models
+      - ./server/data:/app/data
+      - ./server/static:/app/static
+      - ./server/models:/app/models
     environment:
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
