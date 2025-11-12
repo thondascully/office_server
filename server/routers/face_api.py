@@ -2,9 +2,10 @@
 Face Recognition API Router
 Handles registration and event processing
 """
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException, Request
 from typing import List, Optional
 import time
+import asyncio
 import config
 from database import metadata_db, vector_db
 from face_recognition import face_recognizer
@@ -14,6 +15,7 @@ router = APIRouter()
 
 @router.post("/register")
 async def register_person(
+    request: Request,
     name: Optional[str] = Form(None),
     rpi_id: Optional[str] = Form(None),
     images: List[UploadFile] = File(...)
@@ -42,9 +44,15 @@ async def register_person(
     if len(images) > max_images:
         print(f"[Registration] Processed {len(cv_images)}/{len(images)} images (limited to {max_images} for speed)")
 
-    # Generate mean embedding (CPU-intensive, but shouldn't block server)
+    # Generate mean embedding (CPU-intensive, run in thread pool to avoid blocking)
     try:
-        mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
+        executor = request.app.state.face_recognition_executor
+        loop = asyncio.get_event_loop()
+        mean_embedding = await loop.run_in_executor(
+            executor,
+            face_recognizer.compute_mean_embedding,
+            cv_images
+        )
     except Exception as e:
         print(f"  Error computing embedding: {e}")
         raise HTTPException(status_code=500, detail=f"Face recognition error: {str(e)}")
@@ -76,6 +84,7 @@ async def register_person(
 
 @router.post("/event")
 async def handle_event(
+    request: Request,
     direction: str = Form(...),
     rpi_id: Optional[str] = Form(None),
     timestamp: Optional[str] = Form(None),
@@ -117,11 +126,17 @@ async def handle_event(
     else:
         print(f"[Event] Successfully decoded {len(cv_images)}/{len(images)} images")
 
-    # Generate mean embedding (CPU-intensive, optimized for speed)
+    # Generate mean embedding (CPU-intensive, run in thread pool to avoid blocking)
     start_time = time.time()
     print(f"[Event] Computing face embedding from {len(cv_images)} images...")
     try:
-        mean_embedding = face_recognizer.compute_mean_embedding(cv_images)
+        executor = request.app.state.face_recognition_executor
+        loop = asyncio.get_event_loop()
+        mean_embedding = await loop.run_in_executor(
+            executor,
+            face_recognizer.compute_mean_embedding,
+            cv_images
+        )
     except Exception as e:
         error_msg = f"Face recognition error: {str(e)}"
         print(f"[Event] ERROR: {error_msg}")
@@ -137,8 +152,14 @@ async def handle_event(
     elapsed = time.time() - start_time
     print(f"[Event] Face embedding computed successfully in {elapsed:.2f}s")
 
-    # Search for match
-    match_result = vector_db.search(mean_embedding)
+    # Search for match (CPU-intensive vector comparison, run in thread pool)
+    executor = request.app.state.face_recognition_executor
+    loop = asyncio.get_event_loop()
+    match_result = await loop.run_in_executor(
+        executor,
+        vector_db.search,
+        mean_embedding
+    )
 
     if match_result is None:
         # Unknown person - auto-register

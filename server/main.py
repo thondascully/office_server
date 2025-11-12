@@ -3,6 +3,7 @@ Office Map Server - Main Application
 Modular FastAPI application with organized routers
 """
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -16,12 +17,19 @@ async def lifespan(app: FastAPI):
     # Startup
     try:
         from database import metadata_db, vector_db
+        
+        # Create thread pool executor for CPU-intensive tasks (face recognition)
+        # Limit to 2 workers to prevent CPU overload while allowing some concurrency
+        executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="face_recognition")
+        app.state.face_recognition_executor = executor
+        
         print("=" * 70)
         print("  Office Map Server - Starting")
         print("=" * 70)
         print(f"  People in database: {len(metadata_db.people)}")
         print(f"  Vectors in database: {len(vector_db.vectors)}")
         print(f"  Unlabeled people: {len(metadata_db.get_unlabeled())}")
+        print(f"  Face recognition executor: {executor._max_workers} workers")
         print("=" * 70)
         print("[Startup] Server ready and accepting connections")
     except Exception as e:
@@ -30,7 +38,10 @@ async def lifespan(app: FastAPI):
         traceback.print_exc()
         raise
     yield
-    # Shutdown (if needed)
+    # Shutdown
+    print("[Shutdown] Shutting down face recognition executor...")
+    if hasattr(app.state, 'face_recognition_executor'):
+        app.state.face_recognition_executor.shutdown(wait=True)
     print("[Shutdown] Server shutting down")
 
 app = FastAPI(title="Office Map Dashboard", lifespan=lifespan)

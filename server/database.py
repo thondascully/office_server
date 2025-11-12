@@ -7,6 +7,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
+import threading
 import config
 from models import Person
 
@@ -15,22 +16,35 @@ class VectorDatabase:
 
     def __init__(self):
         self.vectors: Dict[str, List[float]] = {}
+        self._lock = threading.Lock()  # Thread-safe locking
         self.load()
 
     def load(self):
         """Load vectors from JSON file"""
-        if config.VECTOR_DB_FILE.exists():
-            with open(config.VECTOR_DB_FILE, 'r') as f:
-                self.vectors = json.load(f)
-            print(f"[Database] Loaded {len(self.vectors)} vectors")
-        else:
-            self.vectors = {}
-            print("[Database] Created new vector database")
+        with self._lock:
+            if config.VECTOR_DB_FILE.exists():
+                with open(config.VECTOR_DB_FILE, 'r') as f:
+                    self.vectors = json.load(f)
+                print(f"[Database] Loaded {len(self.vectors)} vectors")
+            else:
+                self.vectors = {}
+                print("[Database] Created new vector database")
 
     def save(self):
-        """Save vectors to JSON file"""
-        with open(config.VECTOR_DB_FILE, 'w') as f:
-            json.dump(self.vectors, f)
+        """Save vectors to JSON file (thread-safe, atomic write)"""
+        with self._lock:
+            # Atomic write: write to temp file, then rename (prevents corruption)
+            temp_file = config.VECTOR_DB_FILE.with_suffix('.tmp')
+            try:
+                with open(temp_file, 'w') as f:
+                    json.dump(self.vectors, f)
+                # Atomic rename (works on Unix, Windows needs special handling)
+                temp_file.replace(config.VECTOR_DB_FILE)
+            except Exception as e:
+                # Clean up temp file on error
+                if temp_file.exists():
+                    temp_file.unlink()
+                raise
         # Saved silently - no log needed for every save
 
     def add(self, person_id: str, vector: np.ndarray):
@@ -91,60 +105,73 @@ class MetadataDatabase:
     def __init__(self):
         self.people: Dict[str, Person] = {}
         self.unknown_counter = 0
+        self._lock = threading.Lock()  # Thread-safe locking
         self.load()
 
     def load(self):
         """Load metadata from JSON file"""
-        if config.METADATA_FILE.exists():
-            with open(config.METADATA_FILE, 'r') as f:
-                data = json.load(f)
+        with self._lock:
+            if config.METADATA_FILE.exists():
+                with open(config.METADATA_FILE, 'r') as f:
+                    data = json.load(f)
 
-            self.people = {}
-            for person_id, person_data in data['people'].items():
-                # Convert string timestamps back to datetime
-                person_data['created_at'] = datetime.fromisoformat(person_data['created_at'])
-                person_data['last_seen'] = datetime.fromisoformat(person_data['last_seen'])
-                # Handle entered_at (may not exist in old data)
-                if 'entered_at' in person_data and person_data['entered_at']:
-                    person_data['entered_at'] = datetime.fromisoformat(person_data['entered_at'])
-                else:
-                    person_data['entered_at'] = None
-                # Handle last_similarity, visit_count, last_exit (may not exist in old data)
-                person_data.setdefault('last_similarity', None)
-                person_data.setdefault('visit_count', 0)
-                if 'last_exit' in person_data and person_data['last_exit']:
-                    person_data['last_exit'] = datetime.fromisoformat(person_data['last_exit'])
-                else:
-                    person_data['last_exit'] = None
-                # Remove person_id from person_data if it exists to avoid duplicate
-                person_data.pop('person_id', None)
-                self.people[person_id] = Person(**person_data, person_id=person_id)
+                self.people = {}
+                for person_id, person_data in data['people'].items():
+                    # Convert string timestamps back to datetime
+                    person_data['created_at'] = datetime.fromisoformat(person_data['created_at'])
+                    person_data['last_seen'] = datetime.fromisoformat(person_data['last_seen'])
+                    # Handle entered_at (may not exist in old data)
+                    if 'entered_at' in person_data and person_data['entered_at']:
+                        person_data['entered_at'] = datetime.fromisoformat(person_data['entered_at'])
+                    else:
+                        person_data['entered_at'] = None
+                    # Handle last_similarity, visit_count, last_exit (may not exist in old data)
+                    person_data.setdefault('last_similarity', None)
+                    person_data.setdefault('visit_count', 0)
+                    if 'last_exit' in person_data and person_data['last_exit']:
+                        person_data['last_exit'] = datetime.fromisoformat(person_data['last_exit'])
+                    else:
+                        person_data['last_exit'] = None
+                    # Remove person_id from person_data if it exists to avoid duplicate
+                    person_data.pop('person_id', None)
+                    self.people[person_id] = Person(**person_data, person_id=person_id)
 
-            self.unknown_counter = data.get('unknown_counter', 0)
-            print(f"[Database] Loaded {len(self.people)} people")
-        else:
-            self.people = {}
-            self.unknown_counter = 0
-            print("[Database] Created new metadata database")
+                self.unknown_counter = data.get('unknown_counter', 0)
+                print(f"[Database] Loaded {len(self.people)} people")
+            else:
+                self.people = {}
+                self.unknown_counter = 0
+                print("[Database] Created new metadata database")
 
     def save(self):
-        """Save metadata to JSON file"""
-        data = {
-            'people': {},
-            'unknown_counter': self.unknown_counter
-        }
+        """Save metadata to JSON file (thread-safe, atomic write)"""
+        with self._lock:
+            data = {
+                'people': {},
+                'unknown_counter': self.unknown_counter
+            }
 
-        for person_id, person in self.people.items():
-            person_dict = person.dict()
-            # Convert datetime to string for JSON
-            person_dict['created_at'] = person.created_at.isoformat()
-            person_dict['last_seen'] = person.last_seen.isoformat()
-            person_dict['entered_at'] = person.entered_at.isoformat() if person.entered_at else None
-            person_dict['last_exit'] = person.last_exit.isoformat() if person.last_exit else None
-            data['people'][person_id] = person_dict
+            for person_id, person in self.people.items():
+                person_dict = person.dict()
+                # Convert datetime to string for JSON
+                person_dict['created_at'] = person.created_at.isoformat()
+                person_dict['last_seen'] = person.last_seen.isoformat()
+                person_dict['entered_at'] = person.entered_at.isoformat() if person.entered_at else None
+                person_dict['last_exit'] = person.last_exit.isoformat() if person.last_exit else None
+                data['people'][person_id] = person_dict
 
-        with open(config.METADATA_FILE, 'w') as f:
-            json.dump(data, f, indent=2)
+            # Atomic write: write to temp file, then rename (prevents corruption)
+            temp_file = config.METADATA_FILE.with_suffix('.tmp')
+            try:
+                with open(temp_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+                # Atomic rename (works on Unix, Windows needs special handling)
+                temp_file.replace(config.METADATA_FILE)
+            except Exception as e:
+                # Clean up temp file on error
+                if temp_file.exists():
+                    temp_file.unlink()
+                raise
 
     def create_person(self, name: Optional[str] = None, image_paths: List[str] = []) -> str:
         """Create new person entry"""
