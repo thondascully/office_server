@@ -48,9 +48,26 @@ class VectorDatabase:
         # Saved silently - no log needed for every save
 
     def add(self, person_id: str, vector: np.ndarray):
-        """Add or update vector for person"""
+        """Add or update vector for person with validation"""
+        # Validate vector before storing
+        vector_norm = np.linalg.norm(vector)
+        if vector_norm < 1e-6:
+            print(f"[Database] ERROR: Cannot store vector for {person_id} - norm too small ({vector_norm:.6f})")
+            raise ValueError(f"Invalid vector for {person_id}: norm too small")
+        
+        # Ensure vector is normalized
+        if abs(vector_norm - 1.0) > 0.01:
+            print(f"[Database] WARNING: Vector for {person_id} not normalized (norm={vector_norm:.6f}), normalizing")
+            vector = vector / vector_norm
+        
+        # Check if vector is too generic (all values very similar)
+        vector_std = np.std(vector)
+        if vector_std < 0.01:
+            print(f"[Database] WARNING: Vector for {person_id} has very low variance ({vector_std:.6f}), might be too generic")
+        
         self.vectors[person_id] = vector.tolist()
         self.save()
+        print(f"[Database] Stored vector for {person_id} (norm={np.linalg.norm(vector):.6f}, std={vector_std:.6f})")
 
     def get(self, person_id: str) -> Optional[np.ndarray]:
         """Get vector for person"""
@@ -59,26 +76,64 @@ class VectorDatabase:
         return None
 
     def search(self, query_vector: np.ndarray, threshold: float = config.SIMILARITY_THRESHOLD) -> Optional[Tuple[str, float]]:
-        """Find best matching person"""
+        """Find best matching person with diagnostic logging"""
         if not self.vectors:
+            print("[Database] No vectors in database")
             return None
 
-        query_normalized = query_vector / np.linalg.norm(query_vector)
+        # Validate query vector
+        query_norm = np.linalg.norm(query_vector)
+        if query_norm < 1e-6:
+            print(f"[Database] ERROR: Query vector norm too small ({query_norm:.6f}), possible corruption")
+            return None
+        
+        query_normalized = query_vector / query_norm
+        
+        # Validate normalized query
+        normalized_norm = np.linalg.norm(query_normalized)
+        if abs(normalized_norm - 1.0) > 0.01:
+            print(f"[Database] WARNING: Query vector normalization issue (norm={normalized_norm:.6f})")
+        
         best_match = None
         best_similarity = -1.0
+        all_similarities = []
 
         for person_id, stored_vector in self.vectors.items():
             stored_array = np.array(stored_vector)
-            stored_normalized = stored_array / np.linalg.norm(stored_array)
+            
+            # Validate stored vector
+            stored_norm = np.linalg.norm(stored_array)
+            if stored_norm < 1e-6:
+                print(f"[Database] WARNING: Stored vector for {person_id} has norm too small ({stored_norm:.6f}), possible corruption")
+                continue
+            
+            stored_normalized = stored_array / stored_norm
             similarity = float(np.dot(query_normalized, stored_normalized))
+            all_similarities.append((person_id, similarity))
 
             if similarity > best_similarity:
                 best_similarity = similarity
                 best_match = person_id
 
+        # Log all similarities for debugging
+        if len(all_similarities) > 0:
+            all_similarities.sort(key=lambda x: x[1], reverse=True)
+            print(f"[Database] Similarity scores: {[(pid, f'{sim:.4f}') for pid, sim in all_similarities[:5]]}")
+        
+        # Sanity check: if similarity is suspiciously high (>0.95), it might be a problem
+        if best_similarity > 0.95:
+            print(f"[Database] WARNING: Very high similarity ({best_similarity:.4f}) - verify this is correct!")
+            print(f"[Database] This could indicate:")
+            print(f"[Database]   1. Same person (correct)")
+            print(f"[Database]   2. Corrupted/generic embeddings (incorrect)")
+            print(f"[Database]   3. Face detection issues (incorrect)")
+
         if best_similarity >= threshold:
+            print(f"[Database] Match found: {best_match} (similarity: {best_similarity:.4f}, threshold: {threshold})")
             return best_match, best_similarity
-        return None
+        else:
+            print(f"[Database] No match (best: {best_similarity:.4f} < threshold: {threshold})")
+            return None
 
     def delete(self, person_id: str):
         """Delete person's vector"""
@@ -246,6 +301,17 @@ class MetadataDatabase:
                 self.people[person_id].last_exit = datetime.now(timezone.utc)
             
             self.save()
+    
+    def update_appearance(self, person_id: str, appearance: dict):
+        """Update person's appearance features"""
+        if person_id in self.people:
+            self.people[person_id].appearance = appearance
+            self.save()
+            print(f"[Database] Updated appearance for {person_id}")
+    
+    def get_people_in_state(self, state: str) -> List[Person]:
+        """Get all people in a specific state (e.g., 'in' or 'out')"""
+        return [p for p in self.people.values() if p.state == state]
 
     def get_unlabeled(self) -> List[Person]:
         """Get all unlabeled people"""

@@ -1,5 +1,5 @@
 burst_size: 10
 detection_interval: 1.0
 tripwires:
-  inner_x: 1800
+  inner_x: 1350
   outer_x: 800

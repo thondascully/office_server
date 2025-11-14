@@ -20,6 +20,9 @@ MODELS_DIR.mkdir(exist_ok=True)
 
 # Model paths
 ARCFACE_MODEL = MODELS_DIR / "arcfaceresnet100-8.onnx"
+RETINAFACE_MODEL = MODELS_DIR / "retinaface_r50_v1.onnx"
+ULTRAFACE_MODEL = MODELS_DIR / "ultraface_rfb_640.onnx"
+# Keep Haar Cascade as fallback (optional)
 HAAR_CASCADE = MODELS_DIR / "haarcascade_frontalface_default.xml"
 
 # Database files
@@ -42,3 +45,6 @@ PORT = int(os.getenv("PORT", "8000"))
 # Image storage
 THUMBNAIL_SIZE = (150, 150)
 MAX_IMAGES_PER_PERSON = 20  # Keep last N images per person
+
+# Appearance extraction (for back-detection matching)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")  # Ollama API URL

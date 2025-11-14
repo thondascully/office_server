@@ -31,10 +31,13 @@ RUN mkdir -p data static/images static/exports models
 RUN echo "Downloading face recognition models..." && \
     curl -L --progress-bar \
         -o models/arcfaceresnet100-8.onnx \
-        "https://github.com/onnx/models/raw/main/validated/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx" && \
+        "https://github.com/onnx/models/raw/main/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx" && \
     curl -L --progress-bar \
         -o models/haarcascade_frontalface_default.xml \
         "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml" && \
+    (curl -L --progress-bar \
+        -o models/retinaface_r50_v1.onnx \
+        "https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx" || echo "RetinaFace download failed (optional, tiling will be used)") && \
     echo "Models downloaded successfully"
 
 # Expose the port the app runs on

@@ -163,12 +163,20 @@
             </div>
 
             <!-- Vector DB Section -->
-            <div>
+            <div style="margin-bottom: 20px;">
                 <div class="section-header" style="font-size: 12px; margin-bottom: 8px; color: var(--text-secondary); font-weight: 400;">Vector Database Only</div>
                 <div class="control-buttons">
                     <button class="db-btn" onclick="downloadVectorDB()">Download Vector DB</button>
                     <button class="db-btn" onclick="document.getElementById('vectorUploadInput').click()">Upload Vector DB</button>
                     <input type="file" id="vectorUploadInput" accept=".json" style="display: none;" onchange="uploadVectorDB(event)">
+                </div>
+            </div>
+
+            <!-- Vector Analysis Section -->
+            <div>
+                <div class="section-header" style="font-size: 12px; margin-bottom: 8px; color: var(--text-secondary); font-weight: 400;">Vector Analysis</div>
+                <div class="control-buttons">
+                    <button class="db-btn" id="showSimilarityMatrixBtn" onclick="window.showSimilarityMatrix ? window.showSimilarityMatrix() : console.error('showSimilarityMatrix not available');">View Similarity Matrix</button>
                 </div>
             </div>
         </div>
@@ -278,6 +286,19 @@
             <div id="rpiStatusDetails"></div>
             <div class="modal-actions">
                 <button class="secondary" onclick="closeRPiStatusModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Similarity Matrix Modal -->
+    <div class="modal" id="similarityMatrixModal">
+        <div class="modal-content" style="max-width: 90vw; max-height: 90vh; overflow: auto;">
+            <h2>Vector Similarity Matrix</h2>
+            <div id="similarityMatrixContent">
+                <div style="text-align: center; padding: 20px;">Loading...</div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeSimilarityMatrix()">Close</button>
             </div>
         </div>
     </div>

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from datetime import datetime
 import shutil
 import json
+import numpy as np
 import config
 from database import vector_db, metadata_db
 
@@ -122,4 +123,71 @@ async def import_full_state(file: UploadFile = File(...)):
         "status": "success",
         "vectors_imported": len(vector_db.vectors),
         "people_imported": len(metadata_db.people)
+    }
+
+@router.get("/vector-similarity-matrix")
+async def get_vector_similarity_matrix():
+    """Get similarity matrix between all vector database entries"""
+    if not vector_db.vectors:
+        return {
+            "status": "empty",
+            "message": "No vectors in database",
+            "matrix": [],
+            "person_ids": []
+        }
+    
+    person_ids = list(vector_db.vectors.keys())
+    n = len(person_ids)
+    
+    # Compute similarity matrix
+    matrix = []
+    for i, person_id_i in enumerate(person_ids):
+        row = []
+        vector_i = np.array(vector_db.vectors[person_id_i])
+        vector_i_norm = vector_i / np.linalg.norm(vector_i)
+        
+        for j, person_id_j in enumerate(person_ids):
+            if i == j:
+                # Same person = 1.0
+                similarity = 1.0
+            else:
+                vector_j = np.array(vector_db.vectors[person_id_j])
+                vector_j_norm = vector_j / np.linalg.norm(vector_j)
+                similarity = float(np.dot(vector_i_norm, vector_j_norm))
+            
+            row.append(round(similarity, 4))
+        matrix.append(row)
+    
+    # Get person names for display
+    person_info = []
+    for person_id in person_ids:
+        person = metadata_db.get(person_id)
+        person_info.append({
+            "person_id": person_id,
+            "name": person.name if person else None,
+            "vector_norm": round(float(np.linalg.norm(np.array(vector_db.vectors[person_id]))), 6)
+        })
+    
+    # Find min/max similarities (excluding diagonal)
+    similarities = []
+    for i in range(n):
+        for j in range(n):
+            if i != j:
+                similarities.append(matrix[i][j])
+    
+    min_similarity = min(similarities) if similarities else 0.0
+    max_similarity = max(similarities) if similarities else 1.0
+    avg_similarity = np.mean(similarities) if similarities else 0.0
+    
+    return {
+        "status": "success",
+        "person_ids": person_ids,
+        "person_info": person_info,
+        "matrix": matrix,
+        "stats": {
+            "count": n,
+            "min_similarity": round(min_similarity, 4),
+            "max_similarity": round(max_similarity, 4),
+            "avg_similarity": round(avg_similarity, 4)
+        }
     }

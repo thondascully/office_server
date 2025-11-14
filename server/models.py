@@ -3,7 +3,7 @@
 Data Models
 """
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 
 class Person(BaseModel):
@@ -17,6 +17,16 @@ class Person(BaseModel):
     last_similarity: Optional[float] = None  # Last recognition confidence score
     visit_count: int = 0  # Number of times they've entered
     last_exit: Optional[datetime] = None  # When they last left
+    appearance: Optional[Dict] = None  # Appearance features for back-detection matching
+    # Appearance structure:
+    # {
+    #     "height_estimate": "tall/medium/short",
+    #     "shirt_color": "color name",
+    #     "hair_color": "color name",
+    #     "hair_length": "short/medium/long",
+    #     "gender": "male/female/unknown",
+    #     "description": "concise description"
+    # }
 
 class DetectionEvent(BaseModel):
     timestamp: datetime
