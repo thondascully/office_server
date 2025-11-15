@@ -21,11 +21,14 @@ class Person(BaseModel):
     # Appearance structure:
     # {
     #     "height_estimate": "tall/medium/short",
-    #     "shirt_color": "color name",
+    #     "shirt_description": "detailed description with patterns/logos/text (e.g., 'blue t-shirt with white text logo on chest')",
+    #     "shirt_color": "primary color name",
+    #     "pants_description": "detailed description or 'not in picture'",
+    #     "pants_color": "color name or 'not in picture'",
     #     "hair_color": "color name",
     #     "hair_length": "short/medium/long",
     #     "gender": "male/female/unknown",
-    #     "description": "concise description"
+    #     "description": "concise description focusing on distinctive features"
     # }
 
 class DetectionEvent(BaseModel):

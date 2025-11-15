@@ -651,6 +651,16 @@ class FaceRecognizer:
                 if y_end - y < tile_size:
                     y = max(0, y_end - tile_size)
                 
+                # Check if tile overlaps with tripwire zone (if specified)
+                # A tile overlaps if it intersects the zone [outer_x, inner_x]
+                if tripwire_zone:
+                    outer_x, inner_x = tripwire_zone
+                    # Tile overlaps if: tile starts before inner_x AND tile ends after outer_x
+                    tile_overlaps = (x < inner_x) and (x_end > outer_x)
+                    if not tile_overlaps:
+                        # Skip this tile - it's outside the tripwire zone
+                        continue
+                
                 tile = image[y:y_end, x:x_end]
                 
                 if tile.size == 0:

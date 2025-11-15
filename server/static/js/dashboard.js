@@ -1220,6 +1220,152 @@
             }
         }
 
+        // Similarity Matrix - Define directly on window to ensure availability
+        window.showSimilarityMatrix = async function showSimilarityMatrix() {
+            console.log('showSimilarityMatrix called');
+            const modal = document.getElementById('similarityMatrixModal');
+            const content = document.getElementById('similarityMatrixContent');
+            
+            if (!modal) {
+                console.error('Similarity matrix modal not found');
+                showToast('Error: Modal not found', 'error');
+                return;
+            }
+            
+            if (!content) {
+                console.error('Similarity matrix content element not found');
+                showToast('Error: Content element not found', 'error');
+                return;
+            }
+            
+            console.log('Showing modal');
+            modal.classList.add('active');
+            content.innerHTML = '<div style="text-align: center; padding: 20px;">Loading...</div>';
+            
+            try {
+                console.log('Fetching similarity matrix...');
+                const response = await fetch('/api/vector-similarity-matrix');
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                
+                if (data.status === 'empty') {
+                    content.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-secondary);">${data.message}</div>`;
+                    return;
+                }
+                
+                if (data.status !== 'success') {
+                    content.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-danger);">Error loading similarity matrix</div>`;
+                    return;
+                }
+                
+                // Build HTML for similarity matrix
+                let html = '<div style="margin-bottom: 20px;">';
+                html += `<div style="margin-bottom: 10px;"><strong>Statistics:</strong></div>`;
+                html += `<div style="margin-bottom: 5px;">Total Vectors: ${data.stats.count}</div>`;
+                html += `<div style="margin-bottom: 5px;">Min Similarity: ${data.stats.min_similarity}</div>`;
+                html += `<div style="margin-bottom: 5px;">Max Similarity: ${data.stats.max_similarity}</div>`;
+                html += `<div style="margin-bottom: 15px;">Avg Similarity: ${data.stats.avg_similarity}</div>`;
+                html += '</div>';
+                
+                // Person info table
+                html += '<div style="margin-bottom: 20px; overflow-x: auto;">';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+                html += '<thead><tr style="background: var(--bg-secondary);">';
+                html += '<th style="padding: 8px; text-align: left; border: 1px solid var(--border-color);">Person ID</th>';
+                html += '<th style="padding: 8px; text-align: left; border: 1px solid var(--border-color);">Name</th>';
+                html += '<th style="padding: 8px; text-align: left; border: 1px solid var(--border-color);">Vector Norm</th>';
+                html += '</tr></thead><tbody>';
+                
+                data.person_info.forEach(info => {
+                    html += '<tr>';
+                    html += `<td style="padding: 8px; border: 1px solid var(--border-color);">${info.person_id}</td>`;
+                    html += `<td style="padding: 8px; border: 1px solid var(--border-color);">${info.name || '(unlabeled)'}</td>`;
+                    html += `<td style="padding: 8px; border: 1px solid var(--border-color);">${info.vector_norm}</td>`;
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+                html += '</div>';
+                
+                // Similarity matrix table
+                html += '<div style="overflow-x: auto; overflow-y: auto; max-height: 60vh;">';
+                html += '<table style="width: 100%; border-collapse: collapse; font-size: 11px; font-family: monospace;">';
+                
+                // Header row
+                html += '<thead><tr style="background: var(--bg-secondary); position: sticky; top: 0;">';
+                html += '<th style="padding: 6px; text-align: left; border: 1px solid var(--border-color); min-width: 100px;">Person</th>';
+                data.person_ids.forEach(personId => {
+                    const info = data.person_info.find(p => p.person_id === personId);
+                    const label = info?.name || personId;
+                    html += `<th style="padding: 6px; text-align: center; border: 1px solid var(--border-color); min-width: 80px; writing-mode: vertical-rl; text-orientation: mixed;">${label}</th>`;
+                });
+                html += '</tr></thead><tbody>';
+                
+                // Data rows
+                data.matrix.forEach((row, i) => {
+                    const personId = data.person_ids[i];
+                    const info = data.person_info.find(p => p.person_id === personId);
+                    const label = info?.name || personId;
+                    
+                    html += '<tr>';
+                    html += `<td style="padding: 6px; border: 1px solid var(--border-color); font-weight: 600; background: var(--bg-secondary);">${label}</td>`;
+                    
+                    row.forEach((similarity, j) => {
+                        // Color code based on similarity
+                        let bgColor = '';
+                        let textColor = 'var(--text-primary)';
+                        
+                        if (i === j) {
+                            // Diagonal (same person) = 1.0
+                            bgColor = 'rgba(0, 200, 0, 0.2)';
+                        } else if (similarity >= 0.9) {
+                            // Very high similarity (suspicious)
+                            bgColor = 'rgba(255, 0, 0, 0.3)';
+                            textColor = '#ff0000';
+                        } else if (similarity >= 0.7) {
+                            // High similarity (concerning)
+                            bgColor = 'rgba(255, 165, 0, 0.2)';
+                            textColor = '#ff8800';
+                        } else if (similarity >= 0.5) {
+                            // Medium similarity
+                            bgColor = 'rgba(255, 255, 0, 0.1)';
+                        } else {
+                            // Low similarity (good)
+                            bgColor = 'rgba(0, 200, 0, 0.1)';
+                        }
+                        
+                        html += `<td style="padding: 6px; text-align: center; border: 1px solid var(--border-color); background: ${bgColor}; color: ${textColor}; font-weight: ${similarity >= 0.7 ? '600' : '400'};">
+                            ${similarity.toFixed(4)}
+                        </td>`;
+                    });
+                    
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+                html += '</div>';
+                
+                // Legend
+                html += '<div style="margin-top: 20px; padding: 10px; background: var(--bg-secondary); border-radius: 4px; font-size: 12px;">';
+                html += '<strong>Legend:</strong> ';
+                html += '<span style="display: inline-block; width: 20px; height: 20px; background: rgba(0, 200, 0, 0.2); border: 1px solid var(--border-color); margin: 0 5px; vertical-align: middle;"></span> Same person (1.0) | ';
+                html += '<span style="display: inline-block; width: 20px; height: 20px; background: rgba(0, 200, 0, 0.1); border: 1px solid var(--border-color); margin: 0 5px; vertical-align: middle;"></span> Low similarity (&lt;0.5, good) | ';
+                html += '<span style="display: inline-block; width: 20px; height: 20px; background: rgba(255, 255, 0, 0.1); border: 1px solid var(--border-color); margin: 0 5px; vertical-align: middle;"></span> Medium (0.5-0.7) | ';
+                html += '<span style="display: inline-block; width: 20px; height: 20px; background: rgba(255, 165, 0, 0.2); border: 1px solid var(--border-color); margin: 0 5px; vertical-align: middle;"></span> High (0.7-0.9, concerning) | ';
+                html += '<span style="display: inline-block; width: 20px; height: 20px; background: rgba(255, 0, 0, 0.3); border: 1px solid var(--border-color); margin: 0 5px; vertical-align: middle;"></span> Very High (≥0.9, suspicious)';
+                html += '</div>';
+                
+                content.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading similarity matrix:', error);
+                content.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--text-danger);">Error loading similarity matrix: ${error.message}</div>`;
+            }
+        };
+
+        window.closeSimilarityMatrix = function closeSimilarityMatrix() {
+            document.getElementById('similarityMatrixModal').classList.remove('active');
+        };
+
         async function uploadVectorDB(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -1317,5 +1463,23 @@
             const passwordInput = document.getElementById('passwordInput');
             if (passwordInput) {
                 passwordInput.focus();
+            }
+        });
+
+        // Add event listener for similarity matrix button (backup to onclick)
+        window.addEventListener('load', () => {
+            const btn = document.getElementById('showSimilarityMatrixBtn');
+            if (btn && !btn.onclick) {
+                // Only add if onclick handler wasn't set in HTML
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('Similarity matrix button clicked (via event listener)');
+                    if (typeof window.showSimilarityMatrix === 'function') {
+                        window.showSimilarityMatrix();
+                    } else {
+                        console.error('showSimilarityMatrix function not found');
+                        showToast('Error: Function not loaded. Please refresh the page.', 'error');
+                    }
+                });
             }
         });
